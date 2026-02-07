@@ -1,0 +1,14 @@
+{
+    "name": "topmodel/system",
+    "description": "Top Model Platform",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "require": {
+        "php": "^8.1",
+        "ext-pdo": "*"
+    }
+}
