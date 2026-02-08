@@ -50,22 +50,15 @@ $router->post('/register', [AuthController::class, 'registerAction']);
 $router->get('/logout', [AuthController::class, 'logout']);
 
 // ROTAS DO PAINEL DA MODELO
-$router->get('/perfil/editar', [ProfileController::class, 'edit']); // Página visual
-$router->post('/api/perfil/save', [ProfileController::class, 'save']); // API para salvar (AJAX)
+$router->get('/perfil/editar', [ProfileController::class, 'edit']); 
+$router->post('/api/perfil/save', [ProfileController::class, 'save']); 
 
-// ROTAS DE FOTOS (API)
-$router->post('/api/photos/upload', [PhotoController::class, 'upload']);
-$router->post('/api/photos/delete', [PhotoController::class, 'delete']);
-// ROTAS DE GALERIA (Modelo Logada)
-$router->get('/painel/fotos', [PhotoController::class, 'index']);
-$router->post('/api/photos/upload', [PhotoController::class, 'upload']);
+// ROTAS DE FOTOS (API UNIFICADA)
+// Aponta para o método 'upload' que vamos ajustar para aceitar múltiplos arquivos
+$router->post('/api/photos/upload', [PhotoController::class, 'upload']); 
 $router->post('/api/photos/delete', [PhotoController::class, 'delete']);
 // ROTAS DE GALERIA
-// GET: Exibe a página
-$router->get('/painel/fotos', [PhotoController::class, 'index']); 
 
-// POST: Processa os uploads múltiplos (Note que chama 'uploadGallery')
-$router->post('/api/photos/upload', [PhotoController::class, 'uploadGallery']); 
 
 // POST: Deleta
 $router->post('/api/photos/delete', [PhotoController::class, 'delete']);
@@ -81,9 +74,14 @@ $router->post('/api/languages/manage', [ProfileController::class, 'manageLanguag
 $router->get('/perfil/{slug}', [PublicProfileController::class, 'show']);
 
 // ROTAS DE PAGAMENTO
+// Exibe a tela de planos
 $router->get('/planos', [PaymentController::class, 'plans']);
-$router->post('/api/payment/checkout', [PaymentController::class, 'checkout']);
-$router->get('/payment/mock-success', [PaymentController::class, 'mockSuccess']); // Rota de teste
+
+// Processa o formulário de contratação (IMPORTANTE)
+$router->post('/payment/checkout', [PaymentController::class, 'checkout']);
+
+// Tela de sucesso (Mock)
+$router->get('/payment/success', [PaymentController::class, 'mockSuccess']);
 
 // WEBHOOK (Método POST, pois a Unlimit envia dados)
 $router->post('/api/webhooks/unlimit', [WebhookController::class, 'handle']);
@@ -102,6 +100,13 @@ $router->post('/api/admin/users/ban', [AdminController::class, 'toggleBan']);
 // ROTAS DE FAVORITOS
 $router->post('/api/favorites/toggle', [FavoriteController::class, 'toggle']);
 $router->get('/meus-favoritos', [FavoriteController::class, 'index']);
+
+// MUDAR PARA ISSO (ARRAY):
+$router->post('/api/perfil/create', [App\Controllers\ProfileController::class, 'createAPI']);
+$router->get('/perfil/criar', [App\Controllers\ProfileController::class, 'createView']);
+
+// API para carregar cidades via AJAX (Adicione junto com as rotas GET)
+$router->get('/api/locations/cities', [App\Controllers\LocationsController::class, 'getCities']);
 
 // Exemplos futuros (Deixe comentado por enquanto)
 // $router->get('/login', [AuthController::class, 'loginForm']);
