@@ -2,210 +2,138 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
-use App\Core\Database; // Necessário para listar fotos
-use PDO; // Necessário para o fetch
 use App\Models\Photo;
 use App\Models\Profile;
 
 class PhotoController extends Controller {
 
-    // ==================================================================
-    // 1. VISUALIZAÇÃO DA GALERIA (NOVO)
-    // ==================================================================
-    public function index() {
-        // Verifica login
-        if (!isset($_SESSION['user_id'])) {
-            $this->redirect('/login');
-            return;
-        }
-
-        $userId = $_SESSION['user_id'];
+    public function upload() {
+        // Limpeza de buffer para evitar erros de HTML quebrando o JSON
+        ini_set('display_errors', 0);
+        error_reporting(E_ALL);
+        if (ob_get_length()) ob_clean(); 
         
-        // Usa o método que você já tem para pegar o perfil
-        $profile = Profile::getByUserId($userId);
+        header('Content-Type: application/json');
 
-        if (!$profile) {
-            $this->redirect('/perfil/criar');
-            return;
-        }
-
-        // Busca todas as fotos do perfil (Usando SQL direto para garantir a lista completa)
-        $db = Database::getInstance();
-        $stmt = $db->getConnection()->prepare("SELECT * FROM profile_photos WHERE profile_id = :pid ORDER BY created_at DESC");
-        $stmt->execute(['pid' => $profile['id']]);
-        $photos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Renderiza a view que criamos (views/member/photos.php)
-        $this->view('member/photos', [
-            'photos' => $photos,
-            'profile_id' => $profile['id']
-        ]);
-    }
-
-    // ==================================================================
-    // 2. UPLOAD MÚLTIPLO (GALERIA) (NOVO)
-    // ==================================================================
-    public function uploadGallery() {
-        // Verifica sessão e método
-        if (!isset($_SESSION['user_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Acesso negado.']);
-            return;
-        }
-
-        $userId = $_SESSION['user_id'];
-        $profile = Profile::getByUserId($userId);
-
-        if (!$profile || !isset($_FILES['photos'])) {
-            echo json_encode(['success' => false, 'message' => 'Nenhuma foto enviada.']);
-            return;
-        }
-
-        $db = Database::getInstance();
-        $files = $_FILES['photos'];
-        $uploadedCount = 0;
-        $errors = [];
-
-        // O PHP organiza o array de múltiplos arquivos de forma transposta
-        // Precisamos iterar pelo contador
-        $count = is_array($files['name']) ? count($files['name']) : 0;
-
-        for ($i = 0; $i < $count; $i++) {
+        try {
+            if (session_status() === PHP_SESSION_NONE) session_start();
             
-            // 1. Validação de Erro
-            if ($files['error'][$i] !== UPLOAD_ERR_OK) {
-                $errors[] = "Erro no arquivo " . $files['name'][$i];
-                continue;
+            if (!isset($_SESSION['user_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+                throw new \Exception('Acesso não autorizado.');
             }
 
-            // 2. Validação de Tipo
-            $finfo = new \finfo(FILEINFO_MIME_TYPE);
-            $mimeType = $finfo->file($files['tmp_name'][$i]);
-            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+            $userId = $_SESSION['user_id'];
+            $profile = Profile::getByUserId($userId);
 
-            if (!in_array($mimeType, $allowedMimes)) {
-                $errors[] = "Formato inválido: " . $files['name'][$i];
-                continue;
+            if (!$profile) {
+                throw new \Exception('Perfil não encontrado.');
             }
 
-            // 3. Validação de Tamanho (Max 5MB)
-            if ($files['size'][$i] > 5 * 1024 * 1024) {
-                $errors[] = "Muito grande: " . $files['name'][$i];
-                continue;
-            }
-
-            // 4. Processamento
-            $ext = pathinfo($files['name'][$i], PATHINFO_EXTENSION);
-            $newFileName = uniqid('img_', true) . '.' . $ext;
+            // --- DETECÇÃO INTELIGENTE DE ARQUIVOS ---
+            $files = [];
             
-            // Caminhos
-            $dbPath = 'uploads/photos/' . $newFileName;
+            // CASO 1: Múltiplos arquivos (photos[]) - O novo padrão
+            if (isset($_FILES['photos'])) {
+                $raw = $_FILES['photos'];
+                // O PHP inverte a estrutura de arrays em upload múltiplo
+                if (is_array($raw['name'])) {
+                    $count = count($raw['name']);
+                    for ($i = 0; $i < $count; $i++) {
+                        if (empty($raw['name'][$i])) continue;
+                        $files[] = [
+                            'name'     => $raw['name'][$i],
+                            'type'     => $raw['type'][$i],
+                            'tmp_name' => $raw['tmp_name'][$i],
+                            'error'    => $raw['error'][$i],
+                            'size'     => $raw['size'][$i]
+                        ];
+                    }
+                }
+            } 
+            // CASO 2: Arquivo único (photo) - Legado
+            elseif (isset($_FILES['photo'])) {
+                $files[] = $_FILES['photo'];
+            }
+            
+            if (empty($files)) {
+                throw new \Exception('Nenhuma imagem recebida.');
+            }
+
+            // Processamento
             $uploadDir = __DIR__ . '/../../public/uploads/photos/';
-
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
-            if (move_uploaded_file($files['tmp_name'][$i], $uploadDir . $newFileName)) {
-                // Salva no Banco (Sempre como pendente de aprovação: is_approved = 0)
-                $stmt = $db->getConnection()->prepare("INSERT INTO profile_photos (profile_id, file_path, is_approved, created_at) VALUES (:pid, :path, 0, NOW())");
-                $stmt->execute([
-                    'pid' => $profile['id'],
-                    'path' => $dbPath
-                ]);
-                $uploadedCount++;
-            } else {
-                $errors[] = "Falha ao salvar: " . $files['name'][$i];
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+            $uploadedCount = 0;
+            $errors = [];
+
+            foreach ($files as $file) {
+                if ($file['error'] !== UPLOAD_ERR_OK) {
+                    $errors[] = "Erro envio: " . $file['name'];
+                    continue;
+                }
+
+                $finfo = new \finfo(FILEINFO_MIME_TYPE);
+                $mimeType = $finfo->file($file['tmp_name']);
+                
+                if (!in_array($mimeType, $allowedMimes)) {
+                    $errors[] = "Formato inválido: " . $file['name'];
+                    continue;
+                }
+
+                if ($file['size'] > 5 * 1024 * 1024) {
+                    $errors[] = "Muito grande (>5MB): " . $file['name'];
+                    continue;
+                }
+
+                $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+                $newFileName = uniqid('img_', true) . '.' . $ext;
+                $dbPath = 'uploads/photos/' . $newFileName;
+
+                if (move_uploaded_file($file['tmp_name'], $uploadDir . $newFileName)) {
+                    try {
+                        Photo::add($profile['id'], $dbPath);
+                        $uploadedCount++;
+                    } catch (\Throwable $e) {
+                        unlink($uploadDir . $newFileName); // Apaga se der erro no banco
+                    }
+                } else {
+                    $errors[] = "Falha ao salvar: " . $file['name'];
+                }
             }
-        }
 
-        echo json_encode([
-            'success' => $uploadedCount > 0,
-            'count' => $uploadedCount,
-            'errors' => $errors
-        ]);
-    }
+            if ($uploadedCount > 0) {
+                echo json_encode([
+                    'success' => true, 
+                    'message' => "$uploadedCount foto(s) enviada(s) com sucesso!"
+                ]);
+            } else {
+                throw new \Exception(empty($errors) ? 'Erro desconhecido.' : implode(', ', $errors));
+            }
 
-    // ==================================================================
-    // 3. UPLOAD UNITÁRIO (MANTIDO DO SEU CÓDIGO ORIGINAL)
-    // ==================================================================
-    public function upload() {
-        if (!isset($_SESSION['user_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
-            exit;
-        }
-
-        $userId = $_SESSION['user_id'];
-        $profile = Profile::getByUserId($userId);
-
-        if (!$profile || !isset($_FILES['photo'])) {
-            echo json_encode(['success' => false, 'message' => 'Nenhuma imagem enviada.']);
-            return;
-        }
-
-        $file = $_FILES['photo'];
-        
-        if ($file['error'] !== UPLOAD_ERR_OK) {
-            echo json_encode(['success' => false, 'message' => 'Erro no upload. Código: ' . $file['error']]);
-            return;
-        }
-
-        $finfo = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->file($file['tmp_name']);
-        
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
-        
-        if (!in_array($mimeType, $allowedMimes)) {
-            echo json_encode(['success' => false, 'message' => 'Arquivo inválido. Apenas JPG, PNG ou WEBP.']);
-            return;
-        }
-
-        if ($file['size'] > 5 * 1024 * 1024) {
-            echo json_encode(['success' => false, 'message' => 'A imagem deve ter no máximo 5MB.']);
-            return;
-        }
-
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $newFileName = uniqid('img_', true) . '.' . $extension;
-        
-        $dbPath = 'uploads/photos/' . $newFileName;
-        $uploadDir = __DIR__ . '/../../public/uploads/photos/';
-        
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-
-        if (move_uploaded_file($file['tmp_name'], $uploadDir . $newFileName)) {
-            $photoId = Photo::add($profile['id'], $dbPath);
-            
-            echo json_encode([
-                'success' => true, 
-                'message' => 'Upload realizado!',
-                'photo' => [
-                    'id' => $photoId,
-                    'url' => url('/' . $dbPath)
-                ]
-            ]);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Falha ao mover arquivo para pasta de destino.']);
+        } catch (\Throwable $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
     }
 
-    // ==================================================================
-    // 4. DELETAR (MANTIDO E AJUSTADO)
-    // ==================================================================
     public function delete() {
+        ini_set('display_errors', 0);
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+
         $input = json_decode(file_get_contents('php://input'), true);
         $photoId = $input['id'] ?? 0;
         
+        if (session_status() === PHP_SESSION_NONE) session_start();
         if (!$photoId || !isset($_SESSION['user_id'])) exit;
 
         $profile = Profile::getByUserId($_SESSION['user_id']);
         
-        // Tenta deletar e recebe o caminho do arquivo
         $filePath = Photo::delete($photoId, $profile['id']);
         
         if ($filePath) {
             $fullPath = __DIR__ . '/../../public/' . $filePath;
-            if (file_exists($fullPath)) {
-                unlink($fullPath);
-            }
+            if (file_exists($fullPath)) unlink($fullPath);
             echo json_encode(['success' => true]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Erro ao deletar.']);

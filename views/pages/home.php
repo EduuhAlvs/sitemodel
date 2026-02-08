@@ -1,182 +1,234 @@
-<?php require __DIR__ . '/../partials/header.php'; ?>
+<?php
+// views/pages/home.php
 
-<div class="bg-gray-900 relative overflow-hidden lg:h-[400px] flex items-center justify-center py-12 lg:py-0">
-    <div class="absolute inset-0 opacity-30 bg-[url('https://source.unsplash.com/random/1920x600/?fashion,model,dark')] bg-cover bg-center"></div>
-    <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
+use App\Models\Profile;
+use App\Core\Database;
 
-    <div class="relative z-10 max-w-4xl mx-auto text-center px-4">
-        <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
-            Encontre sua <span class="text-gold">Musa</span>
-        </h1>
-        <p class="text-gray-300 text-sm md:text-lg mb-8 max-w-2xl mx-auto hidden md:block">
-            A seleção mais exclusiva de acompanhantes de luxo. Discrição, elegância e experiências inesquecíveis.
-        </p>
-        
-        <div class="flex flex-wrap justify-center gap-3">
-            <a href="<?= url('/?genero=woman') ?>" class="px-6 py-2 rounded-full border border-gray-600 bg-gray-900/80 text-white hover:bg-gold hover:text-dark transition font-medium backdrop-blur-sm">Mulheres</a>
-            <a href="<?= url('/?genero=man') ?>" class="px-6 py-2 rounded-full border border-gray-600 bg-gray-900/80 text-white hover:bg-gold hover:text-dark transition font-medium backdrop-blur-sm">Homens</a>
-            <a href="<?= url('/?genero=trans') ?>" class="px-6 py-2 rounded-full border border-gray-600 bg-gray-900/80 text-white hover:bg-gold hover:text-dark transition font-medium backdrop-blur-sm">Trans</a>
-        </div>
-    </div>
-</div>
-<div class="bg-gray-800 border-b border-gray-700 py-8 mb-8 relative overflow-hidden shadow-md">
-    <div class="max-w-6xl mx-auto px-4 relative z-10">
-        <h2 class="text-2xl md:text-3xl font-bold text-white mb-6 text-center">
-            Encontre sua <span class="text-pink-500">companhia ideal</span>
-        </h2>
-
-        <form action="<?= url('/') ?>" method="GET" class="bg-gray-900 p-4 rounded-xl shadow-2xl border border-gray-700 flex flex-col md:flex-row gap-4 items-center">
-            
-            <div class="w-full md:w-1/3 relative">
-                <i class="fas fa-map-marker-alt absolute left-4 top-3.5 text-gray-500"></i>
-                <select name="city" class="w-full pl-10 pr-4 py-3 bg-gray-800 text-white border border-gray-600 rounded-lg focus:border-pink-500 focus:outline-none appearance-none">
-                    <option value="">Todas as Cidades</option>
-                    <?php foreach($cities as $city): ?>
-                        <option value="<?= $city['slug'] ?>" <?= ($filters['city'] == $city['slug']) ? 'selected' : '' ?>>
-                            <?= $city['name'] ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                    <i class="fas fa-chevron-down text-xs"></i>
-                </div>
-            </div>
-
-            <div class="w-full md:w-1/4 relative">
-                <i class="fas fa-venus-mars absolute left-4 top-3.5 text-gray-500"></i>
-                <select name="gender" class="w-full pl-10 pr-4 py-3 bg-gray-800 text-white border border-gray-600 rounded-lg focus:border-pink-500 focus:outline-none appearance-none">
-                    <option value="">Qualquer Gênero</option>
-                    <option value="F" <?= ($filters['gender'] == 'F') ? 'selected' : '' ?>>Mulheres</option>
-                    <option value="M" <?= ($filters['gender'] == 'M') ? 'selected' : '' ?>>Homens</option>
-                    <option value="T" <?= ($filters['gender'] == 'T') ? 'selected' : '' ?>>Trans</option>
-                </select>
-            </div>
-
-            <div class="w-full md:w-1/3 relative">
-                <i class="fas fa-search absolute left-4 top-3.5 text-gray-500"></i>
-                <input type="text" name="search" value="<?= htmlspecialchars($filters['search']) ?>" 
-                       placeholder="Buscar por nome..." 
-                       class="w-full pl-10 pr-4 py-3 bg-gray-800 text-white border border-gray-600 rounded-lg focus:border-pink-500 focus:outline-none placeholder-gray-500">
-            </div>
-
-            <div class="w-full md:w-auto">
-                <button type="submit" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg flex items-center justify-center">
-                    Buscar
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="max-w-6xl mx-auto px-4 py-8 md:py-12">
+// 1. CARREGAMENTO DE DADOS (Fallback)
+if (!isset($profiles)) {
+    $db = Database::getInstance();
     
-    <div class="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-gray-200 pb-4 gap-4">
-        <div>
-            <h2 class="text-2xl md:text-3xl font-bold text-gray-800">
-                <?php if($filters['gender']): ?>
-                    Exibindo: <?= ucfirst($filters['gender']) ?>
-                <?php else: ?>
-                    Destaques <span class="text-gold">VIP</span>
-                <?php endif; ?>
-            </h2>
-            <p class="text-gray-500 text-sm mt-1">Os perfis mais visualizados da semana.</p>
-        </div>
-        <span class="bg-gray-100 text-gray-600 px-3 py-1 rounded text-xs font-bold uppercase tracking-wide border">
-            <?= count($profiles) ?> perfis encontrados
-        </span>
-    </div>
+    // VIPs
+    $stmt = $db->getConnection()->query("SELECT * FROM profiles WHERE status = 'active' AND current_plan_level > 0 ORDER BY RAND() LIMIT 4");
+    $vipProfiles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Recentes
+    $stmt = $db->getConnection()->query("SELECT * FROM profiles WHERE status = 'active' ORDER BY id DESC LIMIT 12");
+    $recentProfiles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Cidades
+    $stmt = $db->getConnection()->query("SELECT DISTINCT name FROM locations ORDER BY name ASC LIMIT 10");
+    $cities = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} else {
+    $vipProfiles = array_filter($profiles, function($p) { return ($p['current_plan_level'] ?? 0) > 0; });
+    $recentProfiles = $profiles;
+    $cities = $cities ?? [];
+}
 
-    <?php if (empty($profiles)): ?>
-        <div class="text-center py-32 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <p class="text-gray-500 text-lg">Nenhum perfil encontrado.</p>
-        </div>
-    <?php else: ?>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            <?php foreach($profiles as $profile): 
-                $photoUrl = $profile['cover_photo'] ? url('/' . $profile['cover_photo']) : 'https://via.placeholder.com/400x550?text=Sem+Foto';
-                
-                // Verifica se é VIP (nível > 1) para borda dourada
-                $isVip = ($profile['ranking_score'] ?? 0) >= 2000; // Ajuste conforme sua lógica de score
-            ?>
-            
-            <div class="relative group rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition duration-300 bg-gray-900 border <?= $isVip ? 'border-yellow-500' : 'border-gray-800' ?>">
-                
-                <button onclick="toggleFavorite(<?= $profile['id'] ?>, this)" 
-                    class="absolute top-3 right-3 z-20 w-10 h-10 rounded-full bg-black/40 hover:bg-pink-600 text-white backdrop-blur-sm border border-white/10 flex items-center justify-center transition-all duration-200 transform hover:scale-110 shadow-lg">
-                    <i class="far fa-heart text-lg"></i>
-                </button>
-
-                <a href="<?= url('/perfil/' . $profile['slug']) ?>" class="block w-full h-full">
-                    
-                    <div class="aspect-[3/4] w-full relative overflow-hidden">
-                        <img src="<?= $photoUrl ?>" alt="<?= $profile['display_name'] ?>" 
-                             class="w-full h-full object-cover transition duration-700 group-hover:scale-110 group-hover:rotate-1">
-                        
-                        <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
-                        
-                        <?php if($isVip): ?>
-                        <div class="absolute top-3 left-3 bg-yellow-500 text-black text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm z-10">
-                            <i class="fas fa-crown mr-1"></i> VIP
-                        </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="absolute bottom-0 left-0 w-full p-4 z-10">
-                        <div class="flex justify-between items-end">
-                            <div>
-                                <h3 class="text-white font-bold text-lg leading-tight truncate w-32 md:w-40 drop-shadow-md">
-                                    <?= $profile['display_name'] ?>
-                                </h3>
-                                <p class="text-gray-300 text-xs flex items-center mt-1">
-                                    <i class="fas fa-map-marker-alt mr-1 text-pink-500"></i>
-                                    <?= $profile['city_name'] ?? 'Localização não def.' ?>
-                                </p>
-                            </div>
-                            
-                            <div class="text-pink-500 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0 duration-300">
-                                <i class="fas fa-arrow-right"></i>
-                            </div>
-                        </div>
-                    </div>
-                </a>
-
-            </div>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
-</div>
-
-<script>
-async function toggleFavorite(profileId, btn) {
-    try {
-        const response = await fetch('<?= url('/api/favorites/toggle') ?>', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ profile_id: profileId })
-        });
-
-        if (response.status === 401) {
-            alert('Você precisa entrar para favoritar!');
-            window.location.href = '<?= url('/login') ?>';
-            return;
-        }
-
-        const result = await response.json();
-        if (result.success) {
-            // Muda a cor do coração visualmente
-            if (result.is_favorited) {
-                btn.classList.remove('text-gray-400');
-                btn.classList.add('text-red-500');
-            } else {
-                btn.classList.remove('text-red-500');
-                btn.classList.add('text-gray-400');
+// Helper de Imagem (CORRIGIDO E BLINDADO)
+function getImg($profileData) {
+    // Verifica se a chave existe e não está vazia
+    $path = $profileData['profile_image'] ?? null;
+    $name = $profileData['display_name'] ?? 'Modelo';
+    
+    if (!empty($path)) {
+        return url('/' . $path);
+    }
+    // Fallback para avatar gerado
+    return 'https://ui-avatars.com/api/?name='.urlencode($name).'&background=db2777&color=fff&size=512';
+}
+?>
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOP Model - Acompanhantes de Luxo</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'], display: ['Outfit', 'sans-serif'] },
+                    colors: { primary: '#db2777', secondary: '#4f46e5' }
+                }
             }
         }
-    } catch (e) {
-        console.error(e);
-    }
-}
-</script>
+    </script>
+    <style>
+        body { background-color: #f8fafc; background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 30px 30px; }
+        .nav-glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(226, 232, 240, 0.8); }
+        .card-model { transition: all 0.3s ease; }
+        .card-model:hover { transform: translateY(-4px); box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15); }
+        .badge-vip { background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); color: #B45309; border: 1px solid #FCD34D; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="text-slate-600 antialiased">
 
+    <nav class="fixed top-0 w-full z-50 nav-glass h-16">
+        <div class="max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
+            <a href="<?= url('/') ?>" class="flex items-center gap-2 group">
+                <span class="font-display font-black text-2xl tracking-tighter text-slate-900 group-hover:opacity-80 transition">
+                    TOP<span class="text-pink-600">Model</span>
+                </span>
+            </a>
 
-<?php require __DIR__ . '/../partials/footer.php'; ?>
+            <div class="hidden md:flex items-center gap-6">
+                <a href="#" class="text-sm font-semibold text-slate-500 hover:text-pink-600 transition">Cidades</a>
+                <div class="h-4 w-px bg-slate-200"></div>
+                <?php if (isset($_SESSION['user_id'])): ?>
+                    <a href="<?= url('/painel/dashboard') ?>" class="bg-slate-900 text-white px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-slate-800 transition shadow-lg shadow-slate-900/20">
+                        Meu Painel
+                    </a>
+                <?php else: ?>
+                    <a href="<?= url('/login') ?>" class="text-sm font-bold text-slate-700 hover:text-pink-600">Entrar</a>
+                    <a href="<?= url('/registro') ?>" class="bg-pink-600 text-white px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-pink-700 transition shadow-lg shadow-pink-600/30">
+                        Criar Conta
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </nav>
+
+    <section class="pt-32 pb-12 px-4 relative overflow-hidden">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-gradient-to-b from-pink-50 via-white to-transparent -z-10"></div>
+        
+        <div class="max-w-4xl mx-auto text-center">
+            <span class="inline-block py-1 px-3 rounded-full bg-pink-50 border border-pink-100 text-pink-600 text-[10px] font-bold uppercase tracking-widest mb-4">
+                Acompanhantes Premium
+            </span>
+            <h1 class="font-display font-black text-4xl md:text-6xl text-slate-900 mb-6 leading-tight">
+                Encontre sua companhia <br>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-600">perfeita hoje.</span>
+            </h1>
+            
+            <form action="<?= url('/') ?>" method="GET" class="relative max-w-lg mx-auto">
+                <input type="text" name="q" placeholder="Busque por nome ou cidade..." 
+                    class="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/40 focus:outline-none focus:ring-2 focus:ring-pink-500/50 text-slate-700 placeholder:text-slate-400 font-medium transition">
+                <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
+                <button type="submit" class="absolute right-2 top-2 bottom-2 bg-slate-900 text-white px-6 rounded-xl font-bold text-sm hover:bg-slate-800 transition">
+                    Buscar
+                </button>
+            </form>
+
+            <?php if(!empty($cities)): ?>
+            <div class="mt-8 flex justify-center gap-2 overflow-x-auto no-scrollbar py-2">
+                <?php foreach($cities as $city): 
+                    $cityName = is_array($city) ? ($city['name'] ?? reset($city) ?? '') : $city;
+                    if (empty($cityName) || !is_string($cityName)) continue;
+                ?>
+                    <a href="?city=<?= urlencode($cityName) ?>" class="whitespace-nowrap px-4 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-bold hover:border-pink-500 hover:text-pink-600 transition shadow-sm">
+                        <?= htmlspecialchars($cityName) ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <?php if(!empty($vipProfiles)): ?>
+    <section class="max-w-7xl mx-auto px-4 mb-16">
+        <div class="flex items-center gap-3 mb-6">
+            <i class="fas fa-crown text-yellow-500 text-xl"></i>
+            <h2 class="font-display font-bold text-2xl text-slate-900">Destaques VIP</h2>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <?php foreach($vipProfiles as $vip): ?>
+                <a href="<?= url('/perfil/' . ($vip['slug'] ?? '')) ?>" class="card-model group relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100">
+                    <img src="<?= getImg($vip) ?>" class="w-full h-full object-cover transition duration-700 group-hover:scale-110">
+                    
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-90"></div>
+                    
+                    <div class="absolute top-3 left-3">
+                        <span class="badge-vip px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide shadow-sm">VIP</span>
+                    </div>
+
+                    <div class="absolute bottom-0 left-0 w-full p-4 text-white">
+                        <h3 class="font-display font-bold text-lg leading-tight mb-1"><?= htmlspecialchars($vip['display_name'] ?? 'Modelo') ?></h3>
+                        <p class="text-xs font-medium text-slate-300 flex items-center gap-1">
+                            <i class="fas fa-map-marker-alt text-pink-500"></i> <?= htmlspecialchars($vip['city'] ?? 'Brasil') ?>
+                        </p>
+                    </div>
+                    <div class="absolute inset-0 border-2 border-yellow-500/50 rounded-2xl pointer-events-none"></div>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <section class="max-w-7xl mx-auto px-4 mb-20">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="font-display font-bold text-2xl text-slate-900">Novidades</h2>
+        </div>
+
+        <?php if(empty($recentProfiles)): ?>
+            <div class="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
+                <i class="far fa-sad-tear text-4xl text-slate-300 mb-4"></i>
+                <p class="text-slate-500 font-medium">Nenhum perfil encontrado.</p>
+            </div>
+        <?php else: ?>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <?php foreach($recentProfiles as $profile): 
+                    $isVip = ($profile['current_plan_level'] ?? 0) > 0;
+                ?>
+                    <a href="<?= url('/perfil/' . ($profile['slug'] ?? '')) ?>" class="card-model block bg-white rounded-2xl border border-slate-100 overflow-hidden hover:border-pink-200">
+                        <div class="relative aspect-[4/5] overflow-hidden bg-slate-100">
+                            <img src="<?= getImg($profile) ?>" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
+                            
+                            <?php if($isVip): ?>
+                                <span class="absolute top-2 right-2 badge-vip px-2 py-0.5 rounded text-[9px] font-bold uppercase shadow-sm">Destaque</span>
+                            <?php endif; ?>
+                            
+                            <div class="absolute bottom-2 left-2">
+                                <span class="bg-white/90 backdrop-blur text-slate-900 px-2 py-0.5 rounded text-[10px] font-bold uppercase shadow-sm flex items-center gap-1">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div> Online
+                                </span>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <h3 class="font-display font-bold text-base text-slate-900 truncate"><?= htmlspecialchars($profile['display_name'] ?? 'Modelo') ?></h3>
+                            <div class="flex items-center justify-between mt-2">
+                                <span class="text-xs text-slate-500 flex items-center gap-1 truncate max-w-[70%]">
+                                    <i class="fas fa-map-marker-alt text-slate-300"></i> <?= htmlspecialchars($profile['city'] ?? 'Brasil') ?>
+                                </span>
+                                <?php if(!empty($profile['birth_date'])): 
+                                    $age = (new DateTime($profile['birth_date']))->diff(new DateTime())->y;
+                                ?>
+                                    <span class="text-xs font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded"><?= $age ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+        
+        <div class="mt-12 text-center">
+            <button class="bg-white border border-slate-200 text-slate-600 px-8 py-3 rounded-xl font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition shadow-sm">
+                Carregar Mais Modelos
+            </button>
+        </div>
+    </section>
+
+    <footer class="bg-white border-t border-slate-200 pt-16 pb-8">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <span class="font-display font-black text-2xl tracking-tighter text-slate-900 mb-4 block">
+                TOP<span class="text-pink-600">Model</span>
+            </span>
+            <p class="text-slate-400 text-xs">
+                &copy; <?= date('Y') ?> TOP Model. Todos os direitos reservados.<br>
+                Plataforma destinada a maiores de 18 anos.
+            </p>
+        </div>
+    </footer>
+
+</body>
+</html>

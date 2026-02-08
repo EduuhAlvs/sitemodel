@@ -2,50 +2,41 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
-use App\Models\Subscription;
+use App\Controllers\PaymentController; // Reusa a lógica de aprovação
 
 class WebhookController extends Controller {
 
-    // URL que você vai cadastrar no painel da Unlimit:
-    // https://seusite.com/api/webhooks/unlimit
     public function handle() {
-        // 1. Recebe o JSON enviado pela Unlimit
+        // 1. Recebe JSON
         $payload = file_get_contents('php://input');
         $data = json_decode($payload, true);
 
-        // Log para debug (opcional, bom para ver o que chega)
-        // file_put_contents(__DIR__ . '/../../webhook_log.txt', $payload . PHP_EOL, FILE_APPEND);
-
         if (!$data) {
-            http_response_code(400); // Bad Request
+            http_response_code(400); 
             exit;
         }
 
-        // 2. Verifica o status do pagamento
-        // A Unlimit geralmente manda algo como 'status': 'COMPLETED' ou 'authorized'
-        // VERIFIQUE A DOCUMENTAÇÃO DA UNLIMIT PARA O NOME EXATO DO CAMPO
-        // Vou assumir que o status de sucesso é 'COMPLETED'
+        // 2. Verifica Status (Exemplo genérico, adapte para Unlimit/Stripe)
         $status = $data['payment_data']['status'] ?? $data['status'] ?? '';
+        
+        // ID da nossa transação que enviamos para o gateway
+        // Geralmente enviamos o ID da tabela 'transactions' como 'merchant_order_id' ou 'reference'
+        $transactionId = $data['merchant_order']['id'] ?? $data['tracking_id'] ?? $data['reference_id'] ?? null;
 
-        if ($status === 'COMPLETED' || $status === 'PAID') {
+        if (($status === 'COMPLETED' || $status === 'PAID') && $transactionId) {
             
-            // 3. Pega o ID da assinatura
-            // Quando criamos o pagamento, enviamos o ID da assinatura como 'merchant_order_id' ou 'tracking_id'
-            $subscriptionId = $data['merchant_order']['id'] ?? $data['tracking_id'] ?? null;
-
-            if ($subscriptionId) {
-                // 4. ATIVA O VIP
-                $success = Subscription::activate((int)$subscriptionId);
-                
-                if ($success) {
-                    http_response_code(200); // OK, recebido e processado
-                    echo "Webhook processed: VIP Activated.";
-                    exit;
-                }
+            // Instancia o PaymentController para usar a lógica centralizada
+            $paymentCtrl = new PaymentController();
+            
+            // Tenta aprovar
+            if ($paymentCtrl->approveTransaction($transactionId)) {
+                http_response_code(200);
+                echo "Webhook Processed: Transaction $transactionId approved.";
+                exit;
             }
         }
 
-        // Se não for sucesso ou não tiver ID, apenas retorna 200 para a Unlimit não ficar tentando reenviar
+        // Retorna 200 mesmo se falhar logica interna para gateway não reenviar
         http_response_code(200);
         exit;
     }

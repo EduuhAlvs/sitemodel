@@ -34,4 +34,18 @@ class Photo {
         }
         return false;
     }
+
+    // NOVO MÉTODO: Busca fotos aprovadas para exibir no perfil público
+    public static function getByProfileId($profileId) {
+        $db = Database::getInstance();
+        // Traz apenas fotos aprovadas (is_approved = 1) ou todas se você não estiver moderando ainda
+        // Sugiro começar trazendo tudo para testar, depois coloque 'WHERE is_approved = 1'
+        $stmt = $db->getConnection()->prepare("
+            SELECT * FROM profile_photos 
+            WHERE profile_id = :pid 
+            ORDER BY created_at DESC
+        ");
+        $stmt->execute(['pid' => $profileId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

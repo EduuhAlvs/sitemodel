@@ -7,6 +7,7 @@ use App\Models\Photo;
 use App\Models\Location;
 use App\Models\Language;
 
+
 class PublicProfileController extends Controller {
 
     public function show($slug) {
