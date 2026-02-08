@@ -24,6 +24,19 @@ function translateAttr($val) {
     $map = ['loira'=>'Loira', 'morena'=>'Morena', 'ruiva'=>'Ruiva', 'preto'=>'Pretos', 'castanhos'=>'Castanhos', 'verdes'=>'Verdes', 'azuis'=>'Azuis'];
     return $map[$val] ?? ucfirst($val);
 }
+
+// Lógica de Exibição da Localização
+$locationDisplay = "Brasil"; // Padrão
+
+if (!empty($profile['city_name'])) {
+    $locationDisplay = htmlspecialchars($profile['city_name']);
+    
+    // Adiciona o estado se existir
+    if (!empty($profile['city_state'])) {
+        $locationDisplay .= ' - ' . htmlspecialchars($profile['city_state']);
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR" class="scroll-smooth">

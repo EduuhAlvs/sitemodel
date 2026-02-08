@@ -5,115 +5,92 @@ use App\Core\Database;
 use PDO;
 
 class Profile {
-    // Busca o perfil pelo ID do Usuário (Logado)
+    
+    // CORREÇÃO: Método adicionado para evitar "Call to undefined method"
+    public static function getById(int $id) {
+        $db = Database::getInstance();
+        $stmt = $db->getConnection()->prepare("SELECT * FROM profiles WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
     public static function getByUserId(int $userId) {
         $db = Database::getInstance();
         $stmt = $db->getConnection()->prepare("SELECT * FROM profiles WHERE user_id = :uid LIMIT 1");
         $stmt->execute(['uid' => $userId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+    
+    // Novo método para verificar propriedade (Usado no Controller para segurança)
+    public static function isOwner(int $userId, int $profileId) {
+        $db = Database::getInstance();
+        $stmt = $db->getConnection()->prepare("SELECT id FROM profiles WHERE id = :pid AND user_id = :uid");
+        $stmt->execute(['pid' => $profileId, 'uid' => $userId]);
+        return $stmt->fetchColumn() ? true : false;
+    }
 
-    // Cria um perfil vazio (Rascunho) assim que a modelo entra na área dela
     public static function createDraft(int $userId, string $email) {
         $db = Database::getInstance();
-        
-        // Gera um slug temporário baseado no email (depois ela muda)
         $slug = preg_replace('/[^a-z0-9]/', '', strtolower(explode('@', $email)[0])) . '-' . uniqid();
-        
-        $sql = "INSERT INTO profiles (user_id, slug, display_name, phone, gender, birth_date) 
-                VALUES (:uid, :slug, 'Modelo Nova', '', 'woman', '2000-01-01')";
-        
+        $sql = "INSERT INTO profiles (user_id, slug, display_name, phone, gender, birth_date, status) 
+                VALUES (:uid, :slug, 'Modelo Nova', '', 'woman', '2000-01-01', 'active')";
         $stmt = $db->getConnection()->prepare($sql);
         $stmt->execute(['uid' => $userId, 'slug' => $slug]);
         return $db->getConnection()->lastInsertId();
     }
 
-    // Método Genérico para Atualizar Campos
-    // Ex: Profile::update(1, ['hair_color' => 'Loira', 'eye_color' => 'Azul'])
     public static function update(int $profileId, array $data) {
         $db = Database::getInstance();
-        
-        // Monta a query dinamicamente baseada nos campos recebidos
+        if (empty($data)) return false;
         $setPart = [];
-        foreach ($data as $key => $value) {
-            $setPart[] = "{$key} = :{$key}";
-        }
-        $sql = "UPDATE profiles SET " . implode(', ', $setPart) . " WHERE id = :id";
-        
-        $data['id'] = $profileId;
-        
+        foreach ($data as $key => $value) { $setPart[] = "{$key} = :{$key}"; }
+        $sql = "UPDATE profiles SET " . implode(', ', $setPart) . " WHERE id = :id_pk";
+        $data['id_pk'] = $profileId;
         $stmt = $db->getConnection()->prepare($sql);
         return $stmt->execute($data);
     }
 
-    
-    // Busca perfis para a Home (Público)
     public static function getListPublic(int $limit = 20, array $filters = []) {
         $db = Database::getInstance();
-        
-        // CORREÇÃO: Removida a linha 'c.state as city_state' que causava o erro
-        $sql = "SELECT p.*, 
-                (SELECT file_path FROM profile_photos WHERE profile_id = p.id LIMIT 1) as cover_photo,
-                c.name as city_name,
-                u.status
-                FROM profiles p
-                JOIN users u ON p.user_id = u.id
-                LEFT JOIN profile_locations pl ON p.id = pl.profile_id AND pl.is_base_city = 1
-                LEFT JOIN cities c ON pl.city_id = c.id
-                WHERE u.status = 'active' 
-                AND u.role = 'user' 
-        ";
-
+        $sql = "SELECT p.*, (SELECT file_path FROM profile_photos WHERE profile_id = p.id ORDER BY id ASC LIMIT 1) as cover_photo, c.name as city_name, c.country_id, u.status as user_status FROM profiles p JOIN users u ON p.user_id = u.id LEFT JOIN profile_locations pl ON p.id = pl.profile_id AND pl.is_base_city = 1 LEFT JOIN cities c ON pl.city_id = c.id WHERE u.status = 'active' AND p.status = 'active'";
         $params = [];
-
-        // 1. Filtro por Gênero
-        if (!empty($filters['gender'])) {
-            $sql .= " AND p.gender = :gender";
-            $params['gender'] = $filters['gender'];
-        }
-        
-        // 2. Filtro por Cidade
-        if (!empty($filters['city'])) {
-            $sql .= " AND c.slug = :city";
-            $params['city'] = $filters['city'];
-        }
-
-        // 3. Busca por Texto
-        if (!empty($filters['search'])) {
-            $sql .= " AND (p.display_name LIKE :search OR p.bio LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
-        }
-
+        if (!empty($filters['gender'])) { $sql .= " AND p.gender = :gender"; $params['gender'] = $filters['gender']; }
+        if (!empty($filters['city'])) { if (is_numeric($filters['city'])) { $sql .= " AND c.id = :city"; } else { $sql .= " AND c.name LIKE :city"; } $params['city'] = $filters['city']; }
+        if (!empty($filters['search'])) { $sql .= " AND (p.display_name LIKE :search OR p.bio LIKE :search)"; $params['search'] = '%' . $filters['search'] . '%'; }
         $sql .= " ORDER BY p.ranking_score DESC, RAND() LIMIT " . (int)$limit;
-
         $stmt = $db->getConnection()->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Busca Perfil Completo pelo Slug (Público)
+    // Busca Perfil Completo pelo Slug (Página Pública)
     public static function getBySlug(string $slug) {
         $db = Database::getInstance();
         
-        // 1. Dados Principais
-        $stmt = $db->getConnection()->prepare("
-            SELECT p.*, u.status, c.name as city_name 
-            FROM profiles p
-            JOIN users u ON p.user_id = u.id
-            LEFT JOIN profile_locations pl ON p.id = pl.profile_id AND pl.is_base_city = 1
-            LEFT JOIN cities c ON pl.city_id = c.id
-            WHERE p.slug = :slug AND u.status = 'active'
-            LIMIT 1
-        ");
+        // QUERY ATUALIZADA: Busca city_name e city_state
+        $sql = "SELECT p.*, 
+                       u.status as user_status, 
+                       c.name as city_name, 
+                       c.state as city_state,
+                       c.country_name
+                FROM profiles p
+                JOIN users u ON p.user_id = u.id
+                LEFT JOIN profile_locations pl ON p.id = pl.profile_id AND pl.is_base_city = 1
+                LEFT JOIN cities c ON pl.city_id = c.id
+                WHERE p.slug = :slug AND u.status = 'active'
+                LIMIT 1";
+
+        $stmt = $db->getConnection()->prepare($sql);
         $stmt->execute(['slug' => $slug]);
         $profile = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$profile) return null;
 
-        // 2. Incrementa Visualizações (Contador)
-        $db->getConnection()->prepare("UPDATE profiles SET views_count = views_count + 1 WHERE id = :id")->execute(['id' => $profile['id']]);
+        // Incrementa Visualizações (usando try-catch para não travar se a coluna não existir)
+        try {
+            $db->getConnection()->prepare("UPDATE profiles SET views_count = views_count + 1 WHERE id = :id")->execute(['id' => $profile['id']]);
+        } catch (\Exception $e) { /* Silencia erro se não tiver views_count */ }
 
         return $profile;
     }
 }
-

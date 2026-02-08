@@ -2,271 +2,203 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\Database;
 use App\Models\Profile;
 use App\Models\Photo; 
 use App\Models\Location;
 use App\Models\Language;
+use App\Models\Subscription;
+use PDO;
 
 class ProfileController extends Controller {
 
-    // Carrega a página de edição (Dashboard)
     public function edit() {
-        // 1. Segurança: Só logado pode acessar
-        if (!isset($_SESSION['user_id'])) {
-            $this->redirect('/login');
-        }
-
-        // 2. Busca o perfil
+        $this->checkAuth(); 
         $userId = $_SESSION['user_id'];
-        $profile = Profile::getByUserId($userId);
+        $db = Database::getInstance();
 
-        // 3. Se não existir perfil ainda, cria um rascunho automático
-        if (!$profile) {
-            Profile::createDraft($userId, $_SESSION['email']);
-            $profile = Profile::getByUserId($userId);
+        // 1. Busca TODOS os perfis do usuário
+        $stmt = $db->getConnection()->prepare("SELECT id, display_name, slug, status, profile_image FROM profiles WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        $allProfiles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($allProfiles)) {
+            $this->redirect('/perfil/criar');
+            exit;
         }
 
-        // 4. Busca as fotos do perfil 
-        // Se não buscar, a variável $photos não existe e dá o erro.
-        $photos = Photo::getAllByProfile($profile['id']);
+        // 2. Define perfil atual (da URL ou o primeiro)
+        $requestedProfileId = isset($_GET['profile_id']) ? intval($_GET['profile_id']) : $allProfiles[0]['id'];
+        
+        // Verifica se o perfil solicitado pertence ao usuário
+        $currentProfile = null;
+        foreach ($allProfiles as $p) {
+            if ($p['id'] == $requestedProfileId) {
+                // Carrega dados completos
+                $currentProfile = Profile::getById($requestedProfileId); 
+                break;
+            }
+        }
+        
+        // Se não achou (ou tentou acessar perfil de outro), volta pro primeiro
+        if (!$currentProfile) {
+            $currentProfile = Profile::getById($allProfiles[0]['id']);
+        }
 
-        // Funçao de carregar cidades
-        $locations = Location::getByProfile($profile['id']);
+        // 3. Carrega dados ESPECÍFICOS do perfil selecionado
+        $photos = Photo::getAllByProfile($currentProfile['id']);
+        $locations = Location::getByProfile($currentProfile['id']);
+        $languages = Language::getByProfile($currentProfile['id']);
+        
+        // 4. Carrega Planos Ativos
+        $subsData = Subscription::getConsolidatedList($currentProfile['id']);
+        $activePlans = $subsData['plans'] ?? [];
 
-        // Função carregar línguas faladas
-        $languages = Language::getByProfile($profile['id']);
-
-        // 5. Renderiza a view passando os dados
         $this->view('model/dashboard', [
-            'profile' => $profile, 
+            'profile' => $currentProfile,
+            'myProfiles' => $allProfiles,
             'photos' => $photos,
             'locations' => $locations,
             'languages' => $languages,
+            'activePlans' => $activePlans
         ]);
     }
 
-    // API De Locais 
-    public function searchCity() {
-        $term = $_GET['q'] ?? '';
-        if (strlen($term) < 3) {
-            echo json_encode([]);
-            return;
-        }
-        $results = Location::search($term);
-        echo json_encode($results);
-    }
-
-    public function manageLocation() {
-        $input = json_decode(file_get_contents('php://input'), true);
-        $action = $input['action'] ?? ''; // 'add', 'remove', 'set_base'
-        $cityId = $input['city_id'] ?? 0;
-        
-        if (!isset($_SESSION['user_id']) || !$cityId) exit;
-        
-        $profile = Profile::getByUserId($_SESSION['user_id']);
-        
-        $success = false;
-        if ($action === 'add') {
-            $success = Location::add($profile['id'], $cityId);
-        } elseif ($action === 'remove') {
-            $success = Location::remove($profile['id'], $cityId);
-        } elseif ($action === 'set_base') {
-            $success = Location::setBase($profile['id'], $cityId);
-        }
-
-        echo json_encode(['success' => $success]);
-    }
-
-    // --- NOVO MÉTODO API ---
-public function manageLanguage() {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $action = $input['action'] ?? ''; 
-    
-    if (!isset($_SESSION['user_id'])) exit;
-    $profile = Profile::getByUserId($_SESSION['user_id']);
-
-    $success = false;
-
-    if ($action === 'add') {
-        $lang = $input['language'] ?? '';
-        $level = $input['level'] ?? 'medium';
-        if ($lang) {
-            $success = Language::add($profile['id'], $lang, $level);
-        }
-    } elseif ($action === 'remove') {
-        $id = $input['id'] ?? 0;
-        if ($id) {
-            $success = Language::remove($id, $profile['id']);
-        }
-    }
-
-    echo json_encode(['success' => $success]);
-}
-
-
-    // Endpoint API para salvar cada card (Recebe JSON via AJAX)
+    // --- SALVAR DADOS (CORREÇÃO DO ERRO 'PERFIL INVÁLIDO') ---
     public function save() {
         header('Content-Type: application/json');
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        if (!isset($_SESSION['user_id'])) { echo json_encode(['success'=>false]); return; }
 
-        if (!isset($_SESSION['user_id'])) {
-            echo json_encode(['success' => false, 'message' => 'Não autorizado']);
-            return;
-        }
-
-        // Lê o JSON enviado pelo Javascript
         $input = json_decode(file_get_contents('php://input'), true);
         $section = $input['section'] ?? '';
         $data = $input['data'] ?? [];
+        $targetProfileId = $data['profile_id'] ?? 0;
 
-        $userId = $_SESSION['user_id'];
-        $profile = Profile::getByUserId($userId);
-
-        if (!$profile) {
-            echo json_encode(['success' => false, 'message' => 'Perfil não encontrado']);
+        // VERIFICAÇÃO CORRETA: O perfil pertence ao usuário?
+        if (!Profile::isOwner($_SESSION['user_id'], $targetProfileId)) {
+            echo json_encode(['success'=>false, 'message'=>'Perfil inválido ou permissão negada.']); 
             return;
         }
 
         try {
-            // Filtra os dados permitidos para cada seção (Segurança)
             $updateData = $this->filterDataBySection($section, $data);
-            
             if (!empty($updateData)) {
-                Profile::update($profile['id'], $updateData);
-                echo json_encode(['success' => true, 'message' => 'Dados salvos com sucesso!']);
+                Profile::update($targetProfileId, $updateData);
+                echo json_encode(['success' => true]);
             } else {
-                echo json_encode(['success' => false, 'message' => 'Nenhum dado válido enviado.']);
+                echo json_encode(['success' => false, 'message' => 'Nada a salvar']);
             }
         } catch (\Exception $e) {
-            echo json_encode(['success' => false, 'message' => 'Erro ao salvar: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
     }
 
-    // Lista de campos permitidos por seção
-    private function filterDataBySection(string $section, array $data): array {
-        $allowed = [];
-        
-        switch ($section) {
-            case 'bio':
-                $allowed = ['display_name', 'gender', 'orientation', 'birth_date', 'ethnicity', 'nationality'];
-                break;
-            case 'appearance':
-                $allowed = ['hair_color', 'eye_color', 'height_cm', 'weight_kg', 'bust', 'waist', 'hips', 'cup_size', 'shaving', 'silicone', 'tattoos'];
-                break;
-            case 'about':
-                $allowed = ['bio', 'smoker', 'drinker'];
-                break;
-            case 'contact':
-                $allowed = ['phone', 'whatsapp_enabled', 'viber_enabled', 'contact_preference'];
-                break;
-            case 'schedule':
-                $allowed = ['is_24_7', 'show_as_night', 'working_hours'];
-                break;
-        }
-
-        return array_filter($data, function($key) use ($allowed) {
-            return in_array($key, $allowed);
-        }, ARRAY_FILTER_USE_KEY);
-    }
-
-
-    /**
-     * API: Processa a criação de um novo perfil (POST /api/perfil/create)
-     */
+    // API Upload de Fotos e outros métodos
     public function createAPI() {
+        if (ob_get_level()) ob_clean();
         header('Content-Type: application/json');
-
-        // 1. Verificação de Auth
-        if (session_status() === PHP_SESSION_NONE) session_start();
-        if (!isset($_SESSION['user_id'])) {
-            echo json_encode(['success' => false, 'message' => 'Não autorizado']);
-            return;
-        }
-
-        $userId = $_SESSION['user_id'];
-        
-        // 2. Receber dados JSON
-        $data = json_decode(file_get_contents('php://input'), true);
-        
-        $displayName = trim($data['display_name'] ?? '');
-        $slug = trim($data['slug'] ?? '');
-        $cityId = intval($data['city_id'] ?? 0);
-        $gender = $data['gender'] ?? 'woman';
-
-        // 3. Validações Básicas
-        if (empty($displayName) || empty($slug) || empty($cityId)) {
-            echo json_encode(['success' => false, 'message' => 'Preencha todos os campos obrigatórios.']);
-            return;
-        }
-
-        $db = Database::getInstance();
-        $conn = $db->getConnection();
-
         try {
-            // 4. VERIFICAÇÃO DE SLOTS (Segurança Crítica)
-            // Conta quantos perfis a usuária já tem
+            if (session_status() === PHP_SESSION_NONE) session_start();
+            if (!isset($_SESSION['user_id'])) throw new \Exception('Sessão expirada.');
+
+            $userId = $_SESSION['user_id'];
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!$input) $input = $_POST;
+
+            $displayName = trim($input['display_name'] ?? '');
+            $slug = trim($input['slug'] ?? '');
+            $cityId = intval($input['city_id'] ?? 0);
+            $gender = $input['gender'] ?? 'woman';
+
+            if (empty($displayName) || empty($slug) || empty($cityId)) throw new \Exception('Preencha todos os campos.');
+
+            $db = Database::getInstance();
+            $conn = $db->getConnection();
+
+            // Verifica Slots
             $stmt = $conn->prepare("SELECT COUNT(*) FROM profiles WHERE user_id = ?");
             $stmt->execute([$userId]);
-            $currentCount = $stmt->fetchColumn();
+            if ($stmt->fetchColumn() >= $this->getUserMaxSlots($userId)) throw new \Exception('Limite atingido.');
 
-            // Busca o limite da usuária
-            $stmt = $conn->prepare("SELECT max_profile_slots FROM users WHERE id = ?");
-            $stmt->execute([$userId]);
-            $maxSlots = $stmt->fetchColumn() ?: 1;
-
-            if ($currentCount >= $maxSlots) {
-                echo json_encode(['success' => false, 'message' => 'Você atingiu o limite de perfis da sua conta. Adquira mais vagas.']);
-                return;
-            }
-
-            // 5. Verifica se o SLUG já existe (deve ser único globalmente)
+            // Verifica Slug
             $stmt = $conn->prepare("SELECT id FROM profiles WHERE slug = ?");
             $stmt->execute([$slug]);
-            if ($stmt->fetch()) {
-                echo json_encode(['success' => false, 'message' => 'Este link de perfil já está em uso. Escolha outro.']);
-                return;
-            }
+            if ($stmt->fetch()) throw new \Exception('Link indisponível.');
 
-            // 6. Busca Nome da Cidade (para salvar cache na tabela profiles se necessário)
-            $stmt = $conn->prepare("SELECT name FROM locations WHERE id = ?");
-            $stmt->execute([$cityId]);
-            $cityName = $stmt->fetchColumn() ?: '';
-
-            // 7. CRIA O PERFIL
-            // Inicia transação para garantir que tudo salva ou nada salva
             $conn->beginTransaction();
-
-            $sql = "INSERT INTO profiles (user_id, display_name, slug, gender, city, status, created_at, updated_at) 
-                    VALUES (?, ?, ?, ?, ?, 'active', NOW(), NOW())";
+            $sql = "INSERT INTO profiles (user_id, display_name, slug, gender, phone, birth_date, status) VALUES (:uid, :name, :slug, :gender, '', '2000-01-01', 'active')";
             $stmt = $conn->prepare($sql);
-            $stmt->execute([$userId, $displayName, $slug, $gender, $cityName]);
-            
+            $stmt->execute(['uid' => $userId, 'name' => $displayName, 'slug' => $slug, 'gender' => $gender]);
             $newProfileId = $conn->lastInsertId();
 
-            // 8. VINCULA A CIDADE (Tabela profile_locations)
-            // Define como base_city = 1
-            $sqlLoc = "INSERT INTO profile_locations (profile_id, city_id, is_base_city) VALUES (?, ?, 1)";
-            $stmtLoc = $conn->prepare($sqlLoc);
-            $stmtLoc->execute([$newProfileId, $cityId]);
-
+            $stmtLoc = $conn->prepare("INSERT INTO profile_locations (profile_id, city_id, is_base_city) VALUES (:pid, :cid, 1)");
+            $stmtLoc->execute(['pid' => $newProfileId, 'cid' => $cityId]);
             $conn->commit();
 
             echo json_encode(['success' => true, 'profile_id' => $newProfileId]);
-
         } catch (\Exception $e) {
-            if ($conn->inTransaction()) $conn->rollBack();
-            // Log do erro real no servidor, mas mensagem genérica pro usuário
-            error_log("Erro ao criar perfil: " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Erro interno ao criar perfil. Tente novamente.']);
+            if (isset($conn) && $conn->inTransaction()) $conn->rollBack();
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function checkSlug() {
+        if (ob_get_level()) ob_clean();
+        header('Content-Type: application/json');
+        $slug = $_GET['slug'] ?? '';
+        if (strlen($slug) < 3) { echo json_encode(['available' => false]); exit; }
+        $forbidden = ['admin', 'painel', 'login', 'api', 'dashboard', 'perfil'];
+        if (in_array($slug, $forbidden)) { echo json_encode(['available' => false]); exit; }
+        $db = Database::getInstance();
+        $stmt = $db->getConnection()->prepare("SELECT count(*) FROM profiles WHERE slug = ?");
+        $stmt->execute([$slug]);
+        echo json_encode(['available' => ($stmt->fetchColumn() == 0)]);
+        exit;
+    }
+
+    private function filterDataBySection($section, $data) {
+        $allowed = [];
+        switch ($section) {
+            case 'bio': $allowed = ['display_name', 'gender', 'orientation', 'birth_date', 'ethnicity', 'nationality']; break;
+            case 'appearance': $allowed = ['hair_color', 'eye_color', 'height_cm', 'weight_kg', 'bust', 'waist', 'hips', 'cup_size', 'shaving', 'silicone', 'tattoos']; break;
+            case 'about': $allowed = ['bio', 'smoker', 'drinker']; break;
+            case 'contact': $allowed = ['phone', 'whatsapp_enabled', 'viber_enabled', 'contact_preference']; break;
+            case 'schedule': $allowed = ['is_24_7', 'show_as_night', 'working_hours']; break;
+            case 'service_details': $allowed = ['incall_available', 'outcall_available', 'service_details']; 
+                if(isset($data['details'])) $data['service_details'] = json_encode($data['details']);
+                break;
+        }
+        return array_intersect_key($data, array_flip($allowed));
+    }
+
+    private function getUserMaxSlots($userId) {
+        $db = Database::getInstance();
+        $stmt = $db->getConnection()->prepare("SELECT max_profile_slots FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        return $stmt->fetchColumn() ?: 1;
+    }
+
+    public function createView() { require __DIR__ . '/../../views/model/create_profile.php'; }
+    public function searchCity() { echo json_encode(Location::search($_GET['q']??'')); }
+    
+    public function manageLocation() {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (Profile::isOwner($_SESSION['user_id'], $input['profile_id'])) {
+            if ($input['action'] == 'add') Location::add($input['profile_id'], $input['city_id']);
+            if ($input['action'] == 'remove') Location::remove($input['profile_id'], $input['city_id']);
+            if ($input['action'] == 'set_base') Location::setBase($input['profile_id'], $input['city_id']);
+            echo json_encode(['success'=>true]);
         }
     }
 
-    public function createView() {
-    // Verifica login
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    if (!isset($_SESSION['user_id'])) { header('Location: /login'); exit; }
-    
-    // Carrega a view que criamos no passo anterior
-    require __DIR__ . '/../../views/model/create_profile.php';
-}
-
+    public function manageLanguage() {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (Profile::isOwner($_SESSION['user_id'], $input['profile_id'])) {
+            if ($input['action'] == 'add') Language::add($input['profile_id'], $input['language'], $input['level']);
+            if ($input['action'] == 'remove') Language::remove($input['id'], $input['profile_id']);
+            echo json_encode(['success'=>true]);
+        }
+    }
 }

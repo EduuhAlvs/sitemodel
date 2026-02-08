@@ -2,141 +2,90 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\Database;
 use App\Models\Photo;
 use App\Models\Profile;
 
 class PhotoController extends Controller {
 
     public function upload() {
-        // Limpeza de buffer para evitar erros de HTML quebrando o JSON
-        ini_set('display_errors', 0);
-        error_reporting(E_ALL);
-        if (ob_get_length()) ob_clean(); 
-        
+        if (session_status() === PHP_SESSION_NONE) session_start();
         header('Content-Type: application/json');
 
-        try {
-            if (session_status() === PHP_SESSION_NONE) session_start();
-            
-            if (!isset($_SESSION['user_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
-                throw new \Exception('Acesso não autorizado.');
-            }
+        if (!isset($_SESSION['user_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Não autorizado']);
+            return;
+        }
 
-            $userId = $_SESSION['user_id'];
-            $profile = Profile::getByUserId($userId);
+        // CORREÇÃO: Recebe o ID do perfil alvo via POST
+        $targetProfileId = isset($_POST['profile_id']) ? intval($_POST['profile_id']) : 0;
 
-            if (!$profile) {
-                throw new \Exception('Perfil não encontrado.');
-            }
+        // Valida se o usuário é dono desse perfil específico
+        if (!Profile::isOwner($_SESSION['user_id'], $targetProfileId)) {
+            echo json_encode(['success' => false, 'message' => 'Perfil inválido.']);
+            return;
+        }
 
-            // --- DETECÇÃO INTELIGENTE DE ARQUIVOS ---
-            $files = [];
-            
-            // CASO 1: Múltiplos arquivos (photos[]) - O novo padrão
-            if (isset($_FILES['photos'])) {
-                $raw = $_FILES['photos'];
-                // O PHP inverte a estrutura de arrays em upload múltiplo
-                if (is_array($raw['name'])) {
-                    $count = count($raw['name']);
-                    for ($i = 0; $i < $count; $i++) {
-                        if (empty($raw['name'][$i])) continue;
-                        $files[] = [
-                            'name'     => $raw['name'][$i],
-                            'type'     => $raw['type'][$i],
-                            'tmp_name' => $raw['tmp_name'][$i],
-                            'error'    => $raw['error'][$i],
-                            'size'     => $raw['size'][$i]
-                        ];
-                    }
-                }
-            } 
-            // CASO 2: Arquivo único (photo) - Legado
-            elseif (isset($_FILES['photo'])) {
-                $files[] = $_FILES['photo'];
-            }
-            
-            if (empty($files)) {
-                throw new \Exception('Nenhuma imagem recebida.');
-            }
+        if (empty($_FILES['photos'])) {
+            echo json_encode(['success' => false, 'message' => 'Nenhuma imagem enviada']);
+            return;
+        }
 
-            // Processamento
-            $uploadDir = __DIR__ . '/../../public/uploads/photos/';
-            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+        $uploadedCount = 0;
+        $db = Database::getInstance();
 
-            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
-            $uploadedCount = 0;
-            $errors = [];
-
-            foreach ($files as $file) {
-                if ($file['error'] !== UPLOAD_ERR_OK) {
-                    $errors[] = "Erro envio: " . $file['name'];
-                    continue;
-                }
-
-                $finfo = new \finfo(FILEINFO_MIME_TYPE);
-                $mimeType = $finfo->file($file['tmp_name']);
+        foreach ($_FILES['photos']['tmp_name'] as $key => $tmpName) {
+            if ($_FILES['photos']['error'][$key] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['photos']['name'][$key], PATHINFO_EXTENSION));
+                $allowed = ['jpg', 'jpeg', 'png', 'webp'];
                 
-                if (!in_array($mimeType, $allowedMimes)) {
-                    $errors[] = "Formato inválido: " . $file['name'];
-                    continue;
-                }
-
-                if ($file['size'] > 5 * 1024 * 1024) {
-                    $errors[] = "Muito grande (>5MB): " . $file['name'];
-                    continue;
-                }
-
-                $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $newFileName = uniqid('img_', true) . '.' . $ext;
-                $dbPath = 'uploads/photos/' . $newFileName;
-
-                if (move_uploaded_file($file['tmp_name'], $uploadDir . $newFileName)) {
-                    try {
-                        Photo::add($profile['id'], $dbPath);
+                if (in_array($ext, $allowed)) {
+                    $newName = uniqid('p' . $targetProfileId . '_') . '.' . $ext;
+                    $targetDir = __DIR__ . '/../../public/uploads/photos/';
+                    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
+                    
+                    if (move_uploaded_file($tmpName, $targetDir . $newName)) {
+                        $filePath = 'uploads/photos/' . $newName;
+                        // Salva usando o ID correto
+                        $stmt = $db->getConnection()->prepare("INSERT INTO profile_photos (profile_id, file_path, is_approved, created_at) VALUES (?, ?, 0, NOW())");
+                        $stmt->execute([$targetProfileId, $filePath]);
                         $uploadedCount++;
-                    } catch (\Throwable $e) {
-                        unlink($uploadDir . $newFileName); // Apaga se der erro no banco
                     }
-                } else {
-                    $errors[] = "Falha ao salvar: " . $file['name'];
                 }
             }
+        }
 
-            if ($uploadedCount > 0) {
-                echo json_encode([
-                    'success' => true, 
-                    'message' => "$uploadedCount foto(s) enviada(s) com sucesso!"
-                ]);
-            } else {
-                throw new \Exception(empty($errors) ? 'Erro desconhecido.' : implode(', ', $errors));
-            }
-
-        } catch (\Throwable $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        if ($uploadedCount > 0) {
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Falha ao salvar arquivos']);
         }
     }
 
     public function delete() {
-        ini_set('display_errors', 0);
-        if (ob_get_length()) ob_clean();
+        if (session_status() === PHP_SESSION_NONE) session_start();
         header('Content-Type: application/json');
-
+        
         $input = json_decode(file_get_contents('php://input'), true);
         $photoId = $input['id'] ?? 0;
-        
-        if (session_status() === PHP_SESSION_NONE) session_start();
-        if (!$photoId || !isset($_SESSION['user_id'])) exit;
+        $profileId = $input['profile_id'] ?? 0;
 
-        $profile = Profile::getByUserId($_SESSION['user_id']);
-        
-        $filePath = Photo::delete($photoId, $profile['id']);
-        
-        if ($filePath) {
-            $fullPath = __DIR__ . '/../../public/' . $filePath;
-            if (file_exists($fullPath)) unlink($fullPath);
+        if (!Profile::isOwner($_SESSION['user_id'], $profileId)) {
+            echo json_encode(['success' => false]); return;
+        }
+
+        $db = Database::getInstance();
+        $stmt = $db->getConnection()->prepare("SELECT file_path FROM profile_photos WHERE id = ? AND profile_id = ?");
+        $stmt->execute([$photoId, $profileId]);
+        $photo = $stmt->fetch();
+
+        if ($photo) {
+            $path = __DIR__ . '/../../public/' . $photo['file_path'];
+            if (file_exists($path)) unlink($path);
+            $db->getConnection()->prepare("DELETE FROM profile_photos WHERE id = ?")->execute([$photoId]);
             echo json_encode(['success' => true]);
         } else {
-            echo json_encode(['success' => false, 'message' => 'Erro ao deletar.']);
+            echo json_encode(['success' => false, 'message' => 'Foto não encontrada']);
         }
     }
 }

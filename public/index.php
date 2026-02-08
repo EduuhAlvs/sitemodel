@@ -108,6 +108,11 @@ $router->get('/perfil/criar', [App\Controllers\ProfileController::class, 'create
 // API para carregar cidades via AJAX (Adicione junto com as rotas GET)
 $router->get('/api/locations/cities', [App\Controllers\LocationsController::class, 'getCities']);
 
+// API para verificar disponibilidade do slug
+$router->get('/api/perfil/check-slug', [App\Controllers\ProfileController::class, 'checkSlug']);
+
+
+
 // Exemplos futuros (Deixe comentado por enquanto)
 // $router->get('/login', [AuthController::class, 'loginForm']);
 // $router->post('/login', [AuthController::class, 'loginAction']);
