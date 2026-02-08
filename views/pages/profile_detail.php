@@ -5,9 +5,22 @@
 $workingHours = is_string($profile['working_hours'] ?? '') ? json_decode($profile['working_hours'], true) : ($profile['working_hours'] ?? []);
 $serviceDetails = is_string($profile['service_details'] ?? '') ? json_decode($profile['service_details'], true) : ($profile['service_details'] ?? []);
 $locations = $locations ?? []; 
+// Garante que a variável photos existe para evitar erros
+$photos = $photos ?? []; 
 
-// Imagem
-$profileImg = !empty($profile['profile_image']) ? url('/' . $profile['profile_image']) : 'https://ui-avatars.com/api/?name='.urlencode($profile['display_name']).'&background=db2777&color=fff&size=512';
+// --- CORREÇÃO: LÓGICA DA FOTO PRINCIPAL ---
+// 1. Tenta pegar a imagem definida na coluna profile_image
+$imgSource = $profile['profile_image'] ?? null;
+
+// 2. Se estiver vazia, tenta pegar a primeira foto da galeria
+if (empty($imgSource) && !empty($photos)) {
+    $firstPhoto = reset($photos); // Pega o primeiro item do array
+    $imgSource = $firstPhoto['file_path'] ?? null;
+}
+
+// 3. Define a URL final (ou usa o avatar genérico se tudo falhar)
+$profileImg = !empty($imgSource) ? url('/' . $imgSource) : 'https://ui-avatars.com/api/?name='.urlencode($profile['display_name']).'&background=db2777&color=fff&size=512';
+// -------------------------------------------
 
 // Idade
 $age = 'N/A';
@@ -25,16 +38,20 @@ function translateAttr($val) {
     return $map[$val] ?? ucfirst($val);
 }
 
-// Lógica de Exibição da Localização
-$locationDisplay = "Brasil"; // Padrão
+// LÓGICA DE LOCALIZAÇÃO (CORRIGIDA)
+$locationDisplay = "Localização não informada";
 
 if (!empty($profile['city_name'])) {
+    // Exibe: Nome da Cidade
     $locationDisplay = htmlspecialchars($profile['city_name']);
     
-    // Adiciona o estado se existir
-    if (!empty($profile['city_state'])) {
-        $locationDisplay .= ' - ' . htmlspecialchars($profile['city_state']);
+    // Se tiver país, adiciona: ", País"
+    if (!empty($profile['country_name'])) {
+        $locationDisplay .= ', ' . htmlspecialchars($profile['country_name']);
     }
+} elseif (!empty($profile['country_name'])) {
+    // Se não tiver cidade vinculada, mostra só o país
+    $locationDisplay = htmlspecialchars($profile['country_name']);
 }
 
 ?>
@@ -115,7 +132,7 @@ if (!empty($profile['city_name'])) {
                             </span>
                         <?php endif; ?>
                         <span class="bg-slate-50 text-slate-500 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                            <i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($profile['city'] ?? 'Brasil') ?>
+                            <i class="fas fa-map-marker-alt"></i> <?= $locationDisplay ?>
                         </span>
                     </div>
 
@@ -156,11 +173,11 @@ if (!empty($profile['city_name'])) {
                     </div>
                     <div class="flex flex-col">
                         <span class="text-[10px] text-slate-400">Cabelos</span>
-                        <span class="font-semibold text-slate-700 text-sm"><?= translateAttr($profile['hair_color']) ?></span>
+                        <span class="font-semibold text-slate-700 text-sm"><?= !empty($profile['hair_color']) ? ucfirst($profile['hair_color']) : '--' ?></span>
                     </div>
                     <div class="flex flex-col">
                         <span class="text-[10px] text-slate-400">Olhos</span>
-                        <span class="font-semibold text-slate-700 text-sm"><?= translateAttr($profile['eye_color']) ?></span>
+                        <span class="font-semibold text-slate-700 text-sm"><?= !empty($profile['eye_color']) ? ucfirst($profile['eye_color']) : '--' ?></span>
                     </div>
                 </div>
                 

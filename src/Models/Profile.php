@@ -67,29 +67,29 @@ class Profile {
     public static function getBySlug(string $slug) {
         $db = Database::getInstance();
         
-        // QUERY ATUALIZADA: Busca city_name e city_state
-        $sql = "SELECT p.*, 
-                       u.status as user_status, 
-                       c.name as city_name, 
-                       c.state as city_state,
-                       c.country_name
-                FROM profiles p
-                JOIN users u ON p.user_id = u.id
-                LEFT JOIN profile_locations pl ON p.id = pl.profile_id AND pl.is_base_city = 1
-                LEFT JOIN cities c ON pl.city_id = c.id
-                WHERE p.slug = :slug AND u.status = 'active'
-                LIMIT 1";
-
-        $stmt = $db->getConnection()->prepare($sql);
+        // CORREÇÃO: Removido 'c.state' pois a coluna não existe na tabela cities
+        $stmt = $db->getConnection()->prepare("
+            SELECT p.*, 
+                   u.status as user_status, 
+                   c.name as city_name, 
+                   co.name as country_name
+            FROM profiles p 
+            JOIN users u ON p.user_id = u.id 
+            LEFT JOIN profile_locations pl ON p.id = pl.profile_id AND pl.is_base_city = 1 
+            LEFT JOIN cities c ON pl.city_id = c.id 
+            LEFT JOIN countries co ON c.country_id = co.id
+            WHERE p.slug = :slug AND u.status = 'active' 
+            LIMIT 1
+        ");
+        
         $stmt->execute(['slug' => $slug]);
         $profile = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$profile) return null;
 
-        // Incrementa Visualizações (usando try-catch para não travar se a coluna não existir)
-        try {
-            $db->getConnection()->prepare("UPDATE profiles SET views_count = views_count + 1 WHERE id = :id")->execute(['id' => $profile['id']]);
-        } catch (\Exception $e) { /* Silencia erro se não tiver views_count */ }
+        try { 
+            $db->getConnection()->prepare("UPDATE profiles SET views_count = views_count + 1 WHERE id = :id")->execute(['id' => $profile['id']]); 
+        } catch (\Exception $e) {}
 
         return $profile;
     }
