@@ -32,17 +32,16 @@ class AuthController extends Controller {
     // ==================================================================
 
     public function loginAction() {
-        // Limpa buffer para garantir JSON limpo
-        ob_clean(); 
+        if (ob_get_length()) ob_clean();
         header('Content-Type: application/json');
 
         try {
             $input = json_decode(file_get_contents('php://input'), true);
-            $email = $input['email'] ?? $_POST['email'] ?? '';
-            $password = $input['password'] ?? $_POST['password'] ?? '';
+            $email = $input['email'] ?? '';
+            $password = $input['password'] ?? '';
 
             if (empty($email) || empty($password)) {
-                echo json_encode(['success' => false, 'message' => 'Preencha e-mail e senha.']);
+                echo json_encode(['success' => false, 'message' => 'Preencha todos os campos.']);
                 return;
             }
 
@@ -51,81 +50,136 @@ class AuthController extends Controller {
             $stmt->execute(['email' => $email]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // CORREÇÃO AQUI: Usamos $user['password_hash'] em vez de $user['password']
             if ($user && password_verify($password, $user['password_hash'])) {
-                
-                // Sucesso!
+                if ($user['status'] !== 'active') {
+                    echo json_encode(['success' => false, 'message' => 'Conta inativa.']);
+                    return;
+                }
+
                 $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_role'] = $user['role'];
+                // Usa user_type (model/member) como role principal
+                $_SESSION['user_role'] = $user['user_type']; 
+                
+                // Busca nome no perfil para exibir
+                $stmtName = $db->getConnection()->prepare("SELECT display_name FROM profiles WHERE user_id = ? LIMIT 1");
+                $stmtName->execute([$user['id']]);
+                $profileName = $stmtName->fetchColumn();
+                
+                $_SESSION['user_name'] = $profileName ? $profileName : 'Membro';
 
-                $redirectUrl = $this->getRedirectUrl($user);
-
-                echo json_encode(['success' => true, 'redirect' => $redirectUrl]);
+                $redirect = $this->getRedirectUrl($user);
+                echo json_encode(['success' => true, 'redirect' => $redirect]);
             } else {
                 echo json_encode(['success' => false, 'message' => 'E-mail ou senha incorretos.']);
             }
 
-        } catch (\Exception $e) {
-            echo json_encode(['success' => false, 'message' => 'Erro: ' . $e->getMessage()]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Erro interno: ' . $e->getMessage()]);
         }
+        exit;
     }
 
     public function registerAction() {
-        ob_clean();
+        if (ob_get_length()) ob_clean();
         header('Content-Type: application/json');
 
         try {
             $input = json_decode(file_get_contents('php://input'), true);
-            $email = $input['email'] ?? $_POST['email'] ?? '';
-            $password = $input['password'] ?? $_POST['password'] ?? '';
-            $confirmPassword = $input['confirm_password'] ?? $_POST['confirm_password'] ?? '';
             
-            // Captura o tipo de conta (client ou model)
-            $accountType = $input['account_type'] ?? 'client'; 
+            $name = trim($input['name'] ?? '');
+            $email = trim($input['email'] ?? '');
+            $password = $input['password'] ?? '';
+            $confirm = $input['confirm_password'] ?? '';
+            $type = $input['account_type'] ?? 'member'; 
+            $birthDate = $input['birth_date'] ?? '';
 
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                throw new \Exception('E-mail inválido.');
+            // --- VALIDAÇÕES ---
+            if (empty($name) || empty($email) || empty($password) || empty($birthDate)) {
+                throw new \Exception('Preencha todos os campos obrigatórios.');
             }
-            if (strlen($password) < 6) {
-                throw new \Exception('A senha deve ter no mínimo 6 caracteres.');
-            }
-            if ($password !== $confirmPassword) {
+
+            if ($password !== $confirm) {
                 throw new \Exception('As senhas não conferem.');
             }
 
+            if (strlen($password) < 6) {
+                throw new \Exception('A senha deve ter no mínimo 6 caracteres.');
+            }
+
+            // Validação de Idade
+            $diff = date_diff(date_create($birthDate), date_create('today'));
+            if ($diff->y < 18) {
+                throw new \Exception('É estritamente proibido o cadastro de menores de 18 anos.');
+            }
+
             $db = Database::getInstance();
+            $conn = $db->getConnection();
             
-            // Verifica duplicidade
-            $check = $db->getConnection()->prepare("SELECT id FROM users WHERE email = :email");
-            $check->execute(['email' => $email]);
-            if ($check->rowCount() > 0) {
+            // Verifica E-mail
+            $stmt = $conn->prepare("SELECT id FROM users WHERE email = :email");
+            $stmt->execute(['email' => $email]);
+            if ($stmt->rowCount() > 0) {
                 throw new \Exception('Este e-mail já está cadastrado.');
             }
 
-            // Cria usuário
-            $hash = password_hash($password, PASSWORD_DEFAULT);
-            $sql = "INSERT INTO users (email, password_hash, role, status, created_at) VALUES (:email, :pass, 'user', 'active', NOW())";
-            $stmt = $db->getConnection()->prepare($sql);
-            
-            if ($stmt->execute(['email' => $email, 'pass' => $hash])) {
+            // --- INÍCIO DA TRANSAÇÃO ---
+            $conn->beginTransaction();
+
+            try {
+                // 1. Inserir Usuário
+                // REMOVIDO 'created_at' do insert para evitar erro se a tabela não tiver.
+                // O banco preencherá automaticamente se tiver default CURRENT_TIMESTAMP.
+                $hash = password_hash($password, PASSWORD_ARGON2ID);
+                $sqlUser = "INSERT INTO users (email, password_hash, role, user_type, status) VALUES (:email, :hash, 'user', :type, 'active')";
+                $stmtUser = $conn->prepare($sqlUser);
+                $stmtUser->execute(['email' => $email, 'hash' => $hash, 'type' => $type]);
                 
-                // --- LÓGICA DE REDIRECIONAMENTO COM INTENÇÃO ---
-                // Se escolheu 'model', mandamos para o login com ?intent=model
-                // Isso pode ser usado depois para abrir direto a página de criar perfil
-                $redirectParams = ($accountType === 'model') ? '?registered=1&intent=model' : '?registered=1';
+                $userId = $conn->lastInsertId();
+
+                // 2. Inserir Perfil Básico
+                // REMOVIDO 'created_at' daqui também.
+                $slug = $this->generateSlug($name) . '-' . uniqid();
                 
-                echo json_encode(['success' => true, 'redirect' => url('/login' . $redirectParams)]);
-            } else {
-                throw new \Exception('Erro ao salvar no banco de dados.');
+                $sqlProfile = "INSERT INTO profiles (user_id, display_name, slug, birth_date, status) VALUES (:uid, :name, :slug, :bdate, 'active')";
+                $stmtProfile = $conn->prepare($sqlProfile);
+                $stmtProfile->execute([
+                    'uid' => $userId,
+                    'name' => $name,
+                    'slug' => $slug,
+                    'bdate' => $birthDate
+                ]);
+
+                $conn->commit();
+
+                // Login automático
+                $_SESSION['user_id'] = $userId;
+                $_SESSION['user_role'] = $type;
+                $_SESSION['user_name'] = $name;
+
+                // Redirecionamento
+                if ($type === 'model') {
+                    $redirect = url('/perfil/editar');
+                } else {
+                    $redirect = url('/minha-conta');
+                }
+
+                echo json_encode(['success' => true, 'redirect' => $redirect]);
+
+            } catch (\Exception $e) {
+                $conn->rollBack();
+                throw $e;
             }
 
-        } catch (\Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Erro ao registrar: ' . $e->getMessage()]);
         }
+        exit;
     }
 
     // ==================================================================
-    // 3. UTILITÁRIOS
+    // 3. MÉTODOS AUXILIARES
     // ==================================================================
 
     public function logout() {
@@ -136,19 +190,9 @@ class AuthController extends Controller {
     }
 
     private function getRedirectUrl($user) {
-        if ($user['role'] === 'admin') {
-            return url('/admin');
-        }
-
-        $db = Database::getInstance();
-        $stmt = $db->getConnection()->prepare("SELECT id FROM profiles WHERE user_id = :uid LIMIT 1");
-        $stmt->execute(['uid' => $user['id']]);
-        
-        if ($stmt->rowCount() > 0) {
-            return url('/perfil/editar');
-        }
-        
-        return url('/');
+        if ($user['role'] === 'admin') return url('/admin');
+        if ($user['user_type'] === 'model') return url('/perfil/editar');
+        return url('/minha-conta'); 
     }
 
     private function redirectBasedOnRole($userId) {
@@ -161,8 +205,16 @@ class AuthController extends Controller {
             $url = $this->getRedirectUrl($user);
             header("Location: $url");
             exit;
-        } else {
-            $this->logout();
         }
+    }
+
+    private function generateSlug($text) {
+        $text = preg_replace('~[^\pL\d]+~u', '-', $text);
+        $text = iconv('utf-8', 'us-ascii//TRANSLIT', $text);
+        $text = preg_replace('~[^-\w]+~', '', $text);
+        $text = trim($text, '-');
+        $text = preg_replace('~-+~', '-', $text);
+        $text = strtolower($text);
+        return empty($text) ? 'user' : $text;
     }
 }

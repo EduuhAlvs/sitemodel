@@ -22,6 +22,8 @@ use App\Controllers\PaymentController;
 use App\Controllers\WebhookController;
 use App\Controllers\AdminController;
 use App\Controllers\FavoriteController;
+use App\Controllers\MemberController;
+use App\Controllers\ReviewsController;
 
 // --- Configuração de Erros (Desative em Produção) ---
 ini_set('display_errors', 1);
@@ -111,6 +113,13 @@ $router->get('/api/locations/cities', [App\Controllers\LocationsController::clas
 // API para verificar disponibilidade do slug
 $router->get('/api/perfil/check-slug', [App\Controllers\ProfileController::class, 'checkSlug']);
 
+
+$router->get('/minha-conta', [MemberController::class, 'dashboard']);
+
+// Rotas de Avaliações
+$router->post('/api/reviews/create', [ReviewsController::class, 'create']);
+$router->post('/api/reviews/reply', [ReviewsController::class, 'reply']);
+$router->post('/api/reviews/delete', [ReviewsController::class, 'delete']);
 
 
 // Exemplos futuros (Deixe comentado por enquanto)

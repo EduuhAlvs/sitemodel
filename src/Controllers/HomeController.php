@@ -3,28 +3,25 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Models\Profile;
-use App\Models\City; 
+use App\Models\Location; // Supondo que você tenha ou vá usar para listar cidades no select
 
 class HomeController extends Controller {
 
     public function index() {
         // Captura filtros da URL
         $filters = [
-            'city'   => $_GET['city'] ?? '',
+            'search' => $_GET['q'] ?? '',
             'gender' => $_GET['gender'] ?? '',
-            'search' => $_GET['search'] ?? ''
+            'city'   => $_GET['city'] ?? ''
         ];
 
-        // Busca perfis filtrados
-        $profiles = Profile::getListPublic(20, $filters);
-        
-        // Busca cidades existentes para o dropdown
-        $cities = City::getAll();
+        // Busca os perfis
+        $profiles = Profile::getListPublic($filters, 24);
 
+        // Prepara dados para a View
         $this->view('pages/home', [
             'profiles' => $profiles,
-            'cities'   => $cities,
-            'filters'  => $filters
+            'filters' => $filters
         ]);
     }
 }
