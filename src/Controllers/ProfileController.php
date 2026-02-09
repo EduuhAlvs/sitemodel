@@ -161,12 +161,28 @@ class ProfileController extends Controller {
     private function filterDataBySection($section, $data) {
         $allowed = [];
         switch ($section) {
-            case 'bio': $allowed = ['display_name', 'gender', 'orientation', 'birth_date', 'ethnicity', 'nationality']; break;
-            case 'appearance': $allowed = ['hair_color', 'eye_color', 'height_cm', 'weight_kg', 'bust', 'waist', 'hips', 'cup_size', 'shaving', 'silicone', 'tattoos']; break;
-            case 'about': $allowed = ['bio', 'smoker', 'drinker']; break;
-            case 'contact': $allowed = ['phone', 'whatsapp_enabled', 'viber_enabled', 'contact_preference']; break;
-            case 'schedule': $allowed = ['is_24_7', 'show_as_night', 'working_hours']; break;
-            case 'service_details': $allowed = ['incall_available', 'outcall_available', 'service_details']; 
+            case 'bio': 
+                $allowed = ['display_name', 'gender', 'orientation', 'birth_date', 'ethnicity', 'nationality']; 
+                break;
+            case 'appearance': 
+                // CORREÇÃO AQUI: Adicionado _cm nas medidas para bater com o banco e o formulário
+                $allowed = [
+                    'hair_color', 'eye_color', 'height_cm', 'weight_kg', 
+                    'bust_cm', 'waist_cm', 'hips_cm', // <--- Mudado de bust/waist/hips para bust_cm...
+                    'cup_size', 'shaving', 'silicone', 'tattoos'
+                ]; 
+                break;
+            case 'about': 
+                $allowed = ['bio', 'smoker', 'drinker']; 
+                break;
+            case 'contact': 
+                $allowed = ['phone', 'whatsapp_enabled', 'viber_enabled', 'contact_preference']; 
+                break;
+            case 'schedule': 
+                $allowed = ['is_24_7', 'show_as_night', 'working_hours']; 
+                break;
+            case 'service_details': 
+                $allowed = ['incall_available', 'outcall_available', 'service_details']; 
                 if(isset($data['details'])) $data['service_details'] = json_encode($data['details']);
                 break;
         }
