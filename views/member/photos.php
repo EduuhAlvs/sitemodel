@@ -1,14 +1,14 @@
 <?php require __DIR__ . '/../partials/header.php'; ?>
 
 <div class="bg-gray-50 min-h-screen py-10">
-    <div class="max-w-5xl mx-auto px-4">
-        
+    <div class="max-w-7xl mx-auto px-4">
+
         <div class="flex flex-col md:flex-row justify-between items-center mb-8">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800">Minha Galeria</h1>
                 <p class="text-gray-500">Gerencie as fotos que aparecem no seu perfil público.</p>
             </div>
-            
+
             <label class="mt-4 md:mt-0 cursor-pointer bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 flex items-center">
                 <i class="fas fa-cloud-upload-alt mr-2"></i> Adicionar Fotos
                 <input type="file" id="file-upload" multiple accept="image/*" class="hidden" onchange="uploadPhotos(this)">
@@ -35,7 +35,7 @@
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 <?php foreach($photos as $photo): ?>
                 <div class="relative group bg-white rounded-lg shadow-md overflow-hidden" id="photo-<?= $photo['id'] ?>">
-                    
+
                     <div class="aspect-[3/4] overflow-hidden bg-gray-100">
                         <img src="<?= url('/' . $photo['file_path']) ?>" class="w-full h-full object-cover transition duration-500 group-hover:scale-110">
                     </div>
@@ -52,11 +52,11 @@
                         <?php endif; ?>
                     </div>
 
-                    <button onclick="deletePhoto(<?= $photo['id'] ?>)" 
+                    <button onclick="deletePhoto(<?= $photo['id'] ?>)"
                         class="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600">
                         <i class="fas fa-trash-alt text-xs"></i>
                     </button>
-                    
+
                 </div>
                 <?php endforeach; ?>
             </div>
@@ -82,7 +82,7 @@
         const statusBox = document.getElementById('upload-status');
         const progressBar = document.getElementById('progress-bar');
         const percent = document.getElementById('percent');
-        
+
         statusBox.classList.remove('hidden');
         progressBar.style.width = '30%';
         percent.innerText = '30%';

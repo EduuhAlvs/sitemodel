@@ -32,7 +32,8 @@
         </header>
 
         <main class="flex-1 overflow-y-auto p-6 bg-gray-900">
-            
+            <div class="max-w-7xl mx-auto w-full">
+
             <?php if(empty($photos)): ?>
                 <div class="flex flex-col items-center justify-center h-full text-gray-500">
                     <div class="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-4">
@@ -42,11 +43,11 @@
                     <p>Nenhuma foto pendente de revisão.</p>
                 </div>
             <?php else: ?>
-                
+
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     <?php foreach($photos as $photo): ?>
                     <div class="bg-gray-800 rounded-xl overflow-hidden shadow-lg border border-gray-700 flex flex-col group transition hover:border-gray-600" id="photo-<?= $photo['id'] ?>">
-                        
+
                         <div class="p-3 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
                             <span class="font-bold text-sm text-pink-400 truncate max-w-[150px]">
                                 <i class="fas fa-user-circle mr-1"></i> <?= $photo['display_name'] ?>
@@ -56,7 +57,7 @@
 
                         <div class="relative aspect-[3/4] bg-gray-900 overflow-hidden">
                             <img src="<?= url('/' . $photo['file_path']) ?>" class="w-full h-full object-cover transition duration-500 group-hover:scale-105">
-                            
+
                             <a href="<?= url('/' . $photo['file_path']) ?>" target="_blank" class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300">
                                 <span class="bg-black/50 text-white px-3 py-1 rounded-full text-sm border border-white/30 backdrop-blur-sm">
                                     <i class="fas fa-search-plus mr-1"></i> Ampliar
@@ -77,6 +78,8 @@
                 </div>
 
             <?php endif; ?>
+
+            </div>
         </main>
     </div>
 </div>
@@ -89,7 +92,7 @@
         // Feedback visual imediato
         card.style.opacity = '0.5';
         card.style.pointerEvents = 'none';
-        
+
         try {
             const res = await fetch(`${BASE_URL}/api/admin/photos/approve`, {
                 method: 'POST',
@@ -97,7 +100,7 @@
                 body: JSON.stringify({id})
             });
             const data = await res.json();
-            
+
             if(data.success) {
                 // Animação de saída
                 card.style.transform = 'scale(0.9)';
@@ -115,7 +118,7 @@
 
     async function rejectPhoto(id) {
         if(!confirm('Tem certeza? A foto será apagada permanentemente.')) return;
-        
+
         const card = document.getElementById('photo-' + id);
         card.style.opacity = '0.5';
         card.style.pointerEvents = 'none';
@@ -127,7 +130,7 @@
                 body: JSON.stringify({id})
             });
             const data = await res.json();
-            
+
             if(data.success) {
                 card.style.transform = 'scale(0.9)';
                 setTimeout(() => {

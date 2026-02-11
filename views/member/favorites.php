@@ -1,11 +1,11 @@
 <?php require __DIR__ . '/../partials/header.php'; ?>
 
 <div class="bg-gray-50 min-h-screen py-10">
-    <div class="max-w-6xl mx-auto px-4">
-        
+    <div class="max-w-7xl mx-auto px-4">
+
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold text-gray-800"><i class="fas fa-heart text-red-500 mr-2"></i>Meus Favoritos</h1>
-            
+
             <?php if(isset($_SESSION['user_id'])): ?>
                  <a href="<?= url('/logout') ?>" class="text-red-500 hover:underline">Sair</a>
             <?php endif; ?>
@@ -22,7 +22,7 @@
             </div>
         <?php else: ?>
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                <?php foreach($favorites as $profile): 
+                <?php foreach($favorites as $profile):
                     $photoUrl = $profile['cover_photo'] ? url('/' . $profile['cover_photo']) : 'https://via.placeholder.com/400x550';
                 ?>
                 <div class="relative group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition">
@@ -35,7 +35,7 @@
                             <p class="text-xs text-gray-500"><?= $profile['city_name'] ?? 'Brasil' ?></p>
                         </div>
                     </a>
-                    
+
                     <button onclick="toggleFavorite(<?= $profile['id'] ?>, this.parentElement)" class="absolute top-2 right-2 bg-white/90 text-red-500 p-2 rounded-full shadow hover:bg-white transition z-10">
                         <i class="fas fa-trash-alt text-sm"></i>
                     </button>
@@ -49,14 +49,14 @@
 <script>
 async function toggleFavorite(profileId, cardElement) {
     if(!confirm('Remover dos favoritos?')) return;
-    
+
     // Mesma lógica do controller toggle
     const response = await fetch('<?= url('/api/favorites/toggle') ?>', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ profile_id: profileId })
     });
-    
+
     const result = await response.json();
     if(result.success) {
         // Remove o card da tela

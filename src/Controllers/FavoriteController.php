@@ -1,14 +1,16 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
 use PDO;
 
-class FavoriteController extends Controller {
-
+class FavoriteController extends Controller
+{
     // API: Alternar Favorito (Like/Dislike)
-    public function toggle() {
+    public function toggle()
+    {
         if (!isset($_SESSION['user_id'])) {
             http_response_code(401);
             echo json_encode(['success' => false, 'message' => 'Login necessário']);
@@ -19,7 +21,9 @@ class FavoriteController extends Controller {
         $profileId = $input['profile_id'] ?? 0;
         $userId = $_SESSION['user_id'];
 
-        if (!$profileId) return;
+        if (!$profileId) {
+            return;
+        }
 
         $db = Database::getInstance();
         $conn = $db->getConnection();
@@ -27,7 +31,7 @@ class FavoriteController extends Controller {
         // Verifica se já existe
         $check = $conn->prepare("SELECT id FROM favorites WHERE user_id = :uid AND profile_id = :pid");
         $check->execute(['uid' => $userId, 'pid' => $profileId]);
-        
+
         if ($check->rowCount() > 0) {
             // Se existe, REMOVE (Deslike)
             $conn->prepare("DELETE FROM favorites WHERE user_id = :uid AND profile_id = :pid")->execute(['uid' => $userId, 'pid' => $profileId]);
@@ -42,15 +46,18 @@ class FavoriteController extends Controller {
     }
 
     // Página: Meus Favoritos (Dashboard do Cliente)
-    public function index() {
-        if (!isset($_SESSION['user_id'])) $this->redirect('/login');
+    public function index()
+    {
+        if (!isset($_SESSION['user_id'])) {
+            $this->redirect('/login');
+        }
 
         $userId = $_SESSION['user_id'];
         $db = Database::getInstance();
 
         // Busca os perfis que o usuário favoritou
         $stmt = $db->getConnection()->prepare("
-            SELECT p.*, 
+            SELECT p.*,
             (SELECT file_path FROM profile_photos WHERE profile_id = p.id LIMIT 1) as cover_photo,
             c.name as city_name
             FROM favorites f

@@ -1,13 +1,15 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
 use PDO;
 
-class MemberController extends Controller {
-    
-    public function dashboard() {
+class MemberController extends Controller
+{
+    public function dashboard()
+    {
         // 1. Verifica Login
         if (!isset($_SESSION['user_id'])) {
             header('Location: ' . url('/login'));

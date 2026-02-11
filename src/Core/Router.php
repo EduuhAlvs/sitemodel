@@ -1,24 +1,30 @@
 <?php
+
 namespace App\Core;
 
-class Router {
+class Router
+{
     private array $routes = [];
 
-    public function get(string $path, array $handler): void {
+    public function get(string $path, array $handler): void
+    {
         $this->add('GET', $path, $handler);
     }
 
-    public function post(string $path, array $handler): void {
+    public function post(string $path, array $handler): void
+    {
         $this->add('POST', $path, $handler);
     }
 
-    private function add(string $method, string $path, array $handler): void {
+    private function add(string $method, string $path, array $handler): void
+    {
         // Normaliza a rota, mas mantém o formato {param}
         $path = $path === '/' ? '/' : rtrim($path, '/');
         $this->routes[$method][$path] = $handler;
     }
 
-    public function dispatch(): void {
+    public function dispatch(): void
+    {
         $method = $_SERVER['REQUEST_METHOD'];
         $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -28,7 +34,9 @@ class Router {
             $uri = substr($uri, strlen($scriptName));
         }
         $uri = '/' . ltrim($uri, '/');
-        if ($uri !== '/') $uri = rtrim($uri, '/');
+        if ($uri !== '/') {
+            $uri = rtrim($uri, '/');
+        }
         // ------------------------------------
 
         // 1. Tenta Match Exato (Rápido)
@@ -59,11 +67,12 @@ class Router {
         require __DIR__ . '/../../views/partials/footer.php';
     }
 
-    private function executeHandler(array $handler, array $params = []): void {
+    private function executeHandler(array $handler, array $params = []): void
+    {
         $controllerClass = $handler[0];
         $action = $handler[1];
         $controller = new $controllerClass();
-        
+
         // Chama a função passando os parâmetros (ex: o slug)
         call_user_func_array([$controller, $action], $params);
     }

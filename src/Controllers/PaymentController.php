@@ -1,18 +1,22 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Models\Subscription;
 use PDO;
+use Exception;
 
-class PaymentController extends Controller {
-
+class PaymentController extends Controller
+{
     // 1. Exibe a tela de Planos e Preços
-    public function plans() {
+    public function plans()
+    {
         $this->checkAuth();
         $db = Database::getInstance();
         $conn = $db->getConnection();
-        
+
         // Busca preço do Slot
         $stmtSlot = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'slot_price'");
         $slotPrice = $stmtSlot->fetchColumn() ?: 49.90;
@@ -41,16 +45,22 @@ class PaymentController extends Controller {
                     $type['options'][] = $opt;
                 }
             }
-            if (!empty($type['options'])) $structuredPlans[] = $type;
+            if (!empty($type['options'])) {
+                $structuredPlans[] = $type;
+            }
         }
-        
+
         $this->view('model/plans', ['plans' => $structuredPlans, 'slotPrice' => $slotPrice]);
     }
 
     // 2. Processa o Checkout
-    public function checkout() {
+    public function checkout()
+    {
         $this->checkAuth();
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { $this->redirect('/planos'); return; }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('/planos');
+            return;
+        }
 
         $userId = $_SESSION['user_id'];
         $type = $_POST['type'] ?? 'vip';
@@ -72,13 +82,19 @@ class PaymentController extends Controller {
                 $planOptionId = $_POST['plan_option_id'] ?? null;
                 $profileId = $_POST['profile_id'] ?? null;
 
-                if (!$planOptionId || !$profileId) { $this->redirect('/planos?error=missing_data'); return; }
+                if (!$planOptionId || !$profileId) {
+                    $this->redirect('/planos?error=missing_data');
+                    return;
+                }
 
                 $stmt = $conn->prepare("SELECT price FROM plan_options WHERE id = ?");
                 $stmt->execute([$planOptionId]);
                 $amount = $stmt->fetchColumn();
 
-                if (!$amount) { $this->redirect('/planos?error=invalid_option'); return; }
+                if (!$amount) {
+                    $this->redirect('/planos?error=invalid_option');
+                    return;
+                }
 
                 $sql = "INSERT INTO transactions (user_id, profile_id, type, reference_id, amount, status, created_at) VALUES (?, ?, 'vip', ?, ?, 'pending', NOW())";
                 $stmt = $conn->prepare($sql);
@@ -86,22 +102,26 @@ class PaymentController extends Controller {
                 $this->redirect('/payment/success?ref=' . $conn->lastInsertId());
                 return;
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->redirect('/planos?error=internal_error');
         }
     }
 
     // 3. Simulação de Sucesso (CORRIGIDO REDIRECIONAMENTO E DADOS)
-    public function mockSuccess() {
+    public function mockSuccess()
+    {
         $this->checkAuth();
         $transId = $_GET['ref'] ?? null;
 
-        if (!$transId) die("Referência inválida.");
+        if (!$transId) {
+            $this->redirect('/planos?error=invalid_reference');
+            return;
+        }
 
         if ($this->approveTransaction($transId)) {
             $db = Database::getInstance();
             $conn = $db->getConnection();
-            
+
             // Busca dados da transação para saber para onde redirecionar
             $stmt = $conn->prepare("SELECT type, profile_id, reference_id FROM transactions WHERE id = ?");
             $stmt->execute([$transId]);
@@ -115,7 +135,7 @@ class PaymentController extends Controller {
                 $stmtPlan = $conn->prepare("SELECT pt.name as plan_name, po.days FROM plan_options po JOIN plan_types pt ON po.plan_type_id = pt.id WHERE po.id = ?");
                 $stmtPlan->execute([$trans['reference_id']]);
                 $planDetails = $stmtPlan->fetch(PDO::FETCH_ASSOC);
-                
+
                 $planName = urlencode($planDetails['plan_name'] ?? 'VIP');
                 $days = $planDetails['days'] ?? 30;
 
@@ -123,12 +143,13 @@ class PaymentController extends Controller {
                 $this->redirect('/perfil/editar?profile_id=' . $trans['profile_id'] . '&msg=vip_success&plan_name=' . $planName . '&days=' . $days);
             }
         } else {
-            die("Erro ao processar ativação.");
+            $this->redirect('/planos?error=activation_failed');
         }
     }
 
     // 4. Lógica Central de Aprovação
-    public function approveTransaction($transId) {
+    public function approveTransaction($transId)
+    {
         $db = Database::getInstance();
         $conn = $db->getConnection();
 
@@ -136,7 +157,9 @@ class PaymentController extends Controller {
         $stmt->execute([$transId]);
         $trans = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$trans || $trans['status'] === 'paid') return true;
+        if (!$trans || $trans['status'] === 'paid') {
+            return true;
+        }
 
         try {
             $conn->beginTransaction();
@@ -147,16 +170,14 @@ class PaymentController extends Controller {
             if ($trans['type'] === 'slot') {
                 $stmt = $conn->prepare("UPDATE users SET max_profile_slots = max_profile_slots + 1 WHERE id = ?");
                 $stmt->execute([$trans['user_id']]);
-            
             } elseif ($trans['type'] === 'vip') {
                 // Usa seu Model Subscription original para ativar
-                \App\Models\Subscription::activate($trans['profile_id'], $trans['reference_id'], 'MOCK_'.$transId, $trans['amount']);
+                Subscription::activate($trans['profile_id'], $trans['reference_id'], 'MOCK_'.$transId, $trans['amount']);
             }
 
             $conn->commit();
             return true;
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $conn->rollBack();
             return false;
         }

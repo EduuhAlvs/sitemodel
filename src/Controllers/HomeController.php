@@ -1,13 +1,14 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Models\Profile;
-use App\Models\Location; // Supondo que você tenha ou vá usar para listar cidades no select
 
-class HomeController extends Controller {
-
-    public function index() {
+class HomeController extends Controller
+{
+    public function index()
+    {
         // Captura filtros da URL
         $filters = [
             'search' => $_GET['q'] ?? '',

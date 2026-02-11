@@ -13,7 +13,7 @@ if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'model') {
     exit;
 }
 
-$user = $user ?? []; 
+$user = $user ?? [];
 // Garante que display_name tenha um valor, usando a sessão como fallback
 $displayName = $user['display_name'] ?? $_SESSION['user_name'] ?? 'Membro';
 ?>
@@ -23,12 +23,12 @@ $displayName = $user['display_name'] ?? $_SESSION['user_name'] ?? 'Membro';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minha Conta - TOP Model</title>
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    
+
     <script>
         tailwind.config = {
             theme: {
@@ -40,10 +40,10 @@ $displayName = $user['display_name'] ?? $_SESSION['user_name'] ?? 'Membro';
         }
     </script>
     <style>
-        body { 
-            background-color: #f8fafc; 
-            background-image: radial-gradient(#e2e8f0 1px, transparent 1px); 
-            background-size: 32px 32px; 
+        body {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 32px 32px;
         }
         .blob {
             position: absolute; filter: blur(80px); z-index: -1; opacity: 0.5;
@@ -64,7 +64,7 @@ $displayName = $user['display_name'] ?? $_SESSION['user_name'] ?? 'Membro';
                 <div class="bg-slate-900 text-white w-8 h-8 rounded-lg flex items-center justify-center font-display font-bold text-lg group-hover:bg-pink-600 transition">T</div>
                 <span class="font-display font-bold text-xl tracking-tight text-slate-900">TOP<span class="text-pink-600">Model</span></span>
             </a>
-            
+
             <div class="hidden md:flex items-center gap-6">
                 <a href="<?= url('/') ?>" class="text-sm font-semibold text-slate-900 hover:text-pink-600 transition">Home</a>
                 <a href="<?= url('/') ?>?gender=woman" class="text-sm font-medium text-slate-500 hover:text-pink-600 transition">Mulheres</a>
@@ -80,10 +80,10 @@ $displayName = $user['display_name'] ?? $_SESSION['user_name'] ?? 'Membro';
     </nav>
 
     <main class="flex-grow pt-28 pb-20 px-4">
-        <div class="max-w-4xl mx-auto">
-            
+        <div class="max-w-7xl mx-auto">
+
             <div class="flex flex-col md:flex-row gap-8">
-                
+
                 <aside class="md:w-1/3">
                     <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 text-center relative overflow-hidden">
                         <div class="absolute top-0 left-0 w-full h-20 bg-gradient-to-br from-pink-50 to-purple-50"></div>
@@ -93,7 +93,7 @@ $displayName = $user['display_name'] ?? $_SESSION['user_name'] ?? 'Membro';
                             </div>
                             <h2 class="font-display font-bold text-xl text-slate-900 mt-4"><?= htmlspecialchars($displayName) ?></h2>
                             <p class="text-xs text-slate-500 uppercase font-bold tracking-wide mt-1">Conta de Membro</p>
-                            
+
                             <div class="mt-6 border-t border-slate-100 pt-4 space-y-3">
                                 <div class="text-sm text-slate-600 flex justify-between">
                                     <span>Cadastrado em:</span>

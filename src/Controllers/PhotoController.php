@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Core\Controller;
@@ -6,10 +7,13 @@ use App\Core\Database;
 use App\Models\Photo;
 use App\Models\Profile;
 
-class PhotoController extends Controller {
-
-    public function upload() {
-        if (session_status() === PHP_SESSION_NONE) session_start();
+class PhotoController extends Controller
+{
+    public function upload()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
         header('Content-Type: application/json');
 
         if (!isset($_SESSION['user_id'])) {
@@ -37,26 +41,27 @@ class PhotoController extends Controller {
         // Processa os arquivos
         foreach ($_FILES['photos']['tmp_name'] as $key => $tmpName) {
             if ($_FILES['photos']['error'][$key] === UPLOAD_ERR_OK) {
-                
                 $ext = strtolower(pathinfo($_FILES['photos']['name'][$key], PATHINFO_EXTENSION));
                 $allowed = ['jpg', 'jpeg', 'png', 'webp'];
-                
+
                 if (in_array($ext, $allowed)) {
                     // Gera nome único
                     $newName = uniqid('p' . $targetProfileId . '_') . '.' . $ext;
                     $targetDir = __DIR__ . '/../../public/uploads/photos/';
-                    
-                    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
-                    
+
+                    if (!is_dir($targetDir)) {
+                        mkdir($targetDir, 0777, true);
+                    }
+
                     if (move_uploaded_file($tmpName, $targetDir . $newName)) {
                         $filePath = 'uploads/photos/' . $newName;
-                        
+
                         // --- CORREÇÃO PONTUAL AQUI ---
                         // Mudamos is_approved de 0 para 1.
                         // Agora a foto já sobe aprovada automaticamente.
                         $stmt = $db->getConnection()->prepare("INSERT INTO profile_photos (profile_id, file_path, is_approved, created_at) VALUES (?, ?, 1, NOW())");
                         $stmt->execute([$targetProfileId, $filePath]);
-                        
+
                         $uploadedCount++;
                     }
                 }
@@ -70,10 +75,13 @@ class PhotoController extends Controller {
         }
     }
 
-    public function delete() {
-        if (session_status() === PHP_SESSION_NONE) session_start();
+    public function delete()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
         header('Content-Type: application/json');
-        
+
         $input = json_decode(file_get_contents('php://input'), true);
         $photoId = $input['id'] ?? 0;
         $profileId = $input['profile_id'] ?? 0;
@@ -81,22 +89,18 @@ class PhotoController extends Controller {
 
         // Valida dono do perfil
         if (!Profile::isOwner($userId, $profileId)) {
-            echo json_encode(['success' => false, 'message' => 'Permissão negada']); 
+            echo json_encode(['success' => false, 'message' => 'Permissão negada']);
             return;
         }
 
-        $db = Database::getInstance();
-        
-        // Verifica se a foto pertence ao perfil
-        $stmt = $db->getConnection()->prepare("SELECT file_path FROM profile_photos WHERE id = ? AND profile_id = ?");
-        $stmt->execute([$photoId, $profileId]);
-        $photo = $stmt->fetch();
+        // Tenta deletar usando o Model (que retorna o path se sucesso)
+        $filePath = Photo::delete($photoId, $profileId);
 
-        if ($photo) {
-            $path = __DIR__ . '/../../public/' . $photo['file_path'];
-            if (file_exists($path)) unlink($path);
-
-            $db->getConnection()->prepare("DELETE FROM profile_photos WHERE id = ?")->execute([$photoId]);
+        if ($filePath) {
+            $path = __DIR__ . '/../../public/' . $filePath;
+            if (file_exists($path)) {
+                unlink($path);
+            }
             echo json_encode(['success' => true]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Foto não encontrada']);

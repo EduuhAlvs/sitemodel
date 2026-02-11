@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Core\Controller;
@@ -7,10 +8,10 @@ use App\Models\Photo;
 use App\Models\Location;
 use App\Models\Language;
 
-
-class PublicProfileController extends Controller {
-
-    public function show($slug) {
+class PublicProfileController extends Controller
+{
+    public function show($slug)
+    {
         // Busca dados principais
         $profile = Profile::getBySlug($slug);
 
@@ -24,7 +25,7 @@ class PublicProfileController extends Controller {
         $photos = Photo::getAllByProfile($profile['id']);
         $locations = Location::getByProfile($profile['id']);
         $languages = Language::getByProfile($profile['id']);
-        
+
         // Decodifica JSONs
         $profile['service_details'] = json_decode($profile['service_details'] ?? '{}', true);
         $profile['working_hours'] = json_decode($profile['working_hours'] ?? '[]', true);

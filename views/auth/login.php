@@ -62,7 +62,7 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <a href="<?= url('/registrar') ?>" class="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-5 py-2.5 rounded-xl transition shadow-lg shadow-slate-200">Criar Conta</a>
+                <a href="<?= url('/register') ?>" class="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-5 py-2.5 rounded-xl transition shadow-lg shadow-slate-200">Criar Conta</a>
             </div>
         </div>
     </nav>
@@ -119,7 +119,7 @@
                 <div class="mt-8 text-center pt-6 border-t border-slate-100">
                     <p class="text-sm text-slate-500 font-medium">
                         Não tem uma conta? 
-                        <a href="<?= url('/registrar') ?>" class="text-slate-900 font-bold hover:text-pink-600 hover:underline transition">Criar Grátis</a>
+                        <a href="<?= url('/register') ?>" class="text-slate-900 font-bold hover:text-pink-600 hover:underline transition">Criar Grátis</a>
                     </p>
                 </div>
             </div>

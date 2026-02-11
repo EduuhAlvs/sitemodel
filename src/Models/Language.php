@@ -1,12 +1,15 @@
 <?php
+
 namespace App\Models;
 
 use App\Core\Database;
 use PDO;
 
-class Language {
+class Language
+{
     // Lista todas as línguas do perfil
-    public static function getByProfile(int $profileId) {
+    public static function getByProfile(int $profileId)
+    {
         $db = Database::getInstance();
         $stmt = $db->getConnection()->prepare("SELECT * FROM profile_languages WHERE profile_id = :pid");
         $stmt->execute(['pid' => $profileId]);
@@ -14,13 +17,14 @@ class Language {
     }
 
     // Adiciona uma língua
-    public static function add(int $profileId, string $language, string $level) {
+    public static function add(int $profileId, string $language, string $level)
+    {
         $db = Database::getInstance();
-        
+
         // Verifica se já existe pra não duplicar
         $check = $db->getConnection()->prepare("SELECT id FROM profile_languages WHERE profile_id = :pid AND language = :lang");
         $check->execute(['pid' => $profileId, 'lang' => $language]);
-        
+
         if ($check->rowCount() > 0) {
             return false; // Já tem essa língua
         }
@@ -30,7 +34,8 @@ class Language {
     }
 
     // Remove
-    public static function remove(int $id, int $profileId) {
+    public static function remove(int $id, int $profileId)
+    {
         $db = Database::getInstance();
         $stmt = $db->getConnection()->prepare("DELETE FROM profile_languages WHERE id = :id AND profile_id = :pid");
         return $stmt->execute(['id' => $id, 'pid' => $profileId]);

@@ -154,7 +154,7 @@ elseif ($level == 1) $activeBadge = ['label' => 'PREMIUM', 'color' => 'bg-slate-
             </div>
             <div class="flex items-center gap-4">
                 <?php if(isset($_SESSION['user_id'])): ?>
-                    <a href="<?= url('/dashboard') ?>" class="text-xs font-bold text-slate-700 hover:text-pink-600 transition uppercase">Meu Painel</a>
+                    <a href="<?= url('/perfil/editar') ?>" class="text-xs font-bold text-slate-700 hover:text-pink-600 transition uppercase">Meu Painel</a>
                     <a href="<?= url('/logout') ?>" class="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition uppercase">Sair</a>
                 <?php else: ?>
                     <a href="<?= url('/login') ?>" class="text-xs font-bold text-slate-700 hover:text-pink-600 transition uppercase">Entrar</a>

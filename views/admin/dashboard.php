@@ -25,7 +25,7 @@
 
         <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 pl-2">Geral</p>
-            
+
             <a href="<?= url('/admin') ?>" class="flex items-center px-4 py-3 bg-gray-700 text-white rounded-lg transition-colors">
                 <i class="fas fa-chart-pie w-6"></i>
                 <span class="font-medium">Dashboard</span>
@@ -45,12 +45,12 @@
             </a>
 
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-8 mb-2 pl-2">Financeiro</p>
-            
+
             <a href="#" class="flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition-colors">
                 <i class="fas fa-dollar-sign w-6"></i>
                 <span class="font-medium">Pagamentos</span>
             </a>
-            
+
             <a href="#" class="flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition-colors">
                 <i class="fas fa-tags w-6"></i>
                 <span class="font-medium">Planos</span>
@@ -65,12 +65,12 @@
     </aside>
 
     <div class="flex-1 flex flex-col h-screen overflow-hidden">
-        
+
         <header class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
             <button class="md:hidden text-gray-400 focus:outline-none">
                 <i class="fas fa-bars text-xl"></i>
             </button>
-            
+
             <div class="flex items-center ml-auto space-x-4">
                 <div class="flex items-center text-sm text-gray-300">
                     <img src="https://ui-avatars.com/api/?name=Admin&background=random" class="w-8 h-8 rounded-full mr-2">
@@ -83,9 +83,10 @@
         </header>
 
         <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900 p-6">
-            
+            <div class="max-w-7xl mx-auto w-full">
+
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                
+
                 <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-lg">
                     <div class="flex justify-between items-start">
                         <div>
@@ -147,7 +148,7 @@
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 <div class="lg:col-span-2 bg-gray-800 rounded-xl border border-gray-700 p-6 shadow-lg">
                     <h3 class="text-lg font-bold text-gray-100 mb-4">Crescimento de Acessos</h3>
                     <div class="h-64">
@@ -178,6 +179,7 @@
 
             </div>
 
+            </div>
         </main>
     </div>
 </div>

@@ -1,16 +1,18 @@
 <?php
+
 namespace App\Models;
 
 use App\Core\Database;
 use PDO;
 use DateTime;
 
-class Subscription {
-
+class Subscription
+{
     // Mantivemos o método activate ORIGINAL do seu arquivo
-    public static function activate($profileId, $planOptionId, $transactionId = null, $pricePaid = 0) {
+    public static function activate($profileId, $planOptionId, $transactionId = null, $pricePaid = 0)
+    {
         $db = Database::getInstance();
-        
+
         $stmt = $db->getConnection()->prepare("
             SELECT po.days, po.price, pt.level, pt.id as plan_type_id
             FROM plan_options po
@@ -20,28 +22,59 @@ class Subscription {
         $stmt->execute(['id' => $planOptionId]);
         $plan = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$plan) return false;
+        if (!$plan) {
+            return false;
+        }
 
         $daysToAdd = (int)$plan['days'];
         $newLevel = (int)$plan['level'];
 
         // Lógica de Soma e Prioridade
-        $stmt = $db->getConnection()->prepare("SELECT id, expires_at FROM subscriptions WHERE profile_id = :pid AND plan_id IN (SELECT id FROM plan_options WHERE plan_type_id = :ptid) AND expires_at > NOW() AND payment_status = 'paid' ORDER BY expires_at DESC LIMIT 1");
+        $stmt = $db->getConnection()->prepare("
+            SELECT id, expires_at
+            FROM subscriptions
+            WHERE profile_id = :pid
+            AND plan_id IN (SELECT id FROM plan_options WHERE plan_type_id = :ptid)
+            AND expires_at > NOW()
+            AND payment_status = 'paid'
+            ORDER BY expires_at DESC LIMIT 1
+        ");
         $stmt->execute(['pid' => $profileId, 'ptid' => $plan['plan_type_id']]);
         $currentSameLevel = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $stmt = $db->getConnection()->prepare("SELECT MAX(expires_at) as max_expiry FROM subscriptions s JOIN plan_options po ON s.plan_id = po.id JOIN plan_types pt ON po.plan_type_id = pt.id WHERE s.profile_id = :pid AND s.payment_status = 'paid' AND s.expires_at > NOW() AND pt.level > :newLevel");
+        $stmt = $db->getConnection()->prepare("
+            SELECT MAX(expires_at) as max_expiry
+            FROM subscriptions s
+            JOIN plan_options po ON s.plan_id = po.id
+            JOIN plan_types pt ON po.plan_type_id = pt.id
+            WHERE s.profile_id = :pid
+            AND s.payment_status = 'paid'
+            AND s.expires_at > NOW()
+            AND pt.level > :newLevel
+        ");
         $stmt->execute(['pid' => $profileId, 'newLevel' => $newLevel]);
         $higherLevelExpiry = $stmt->fetch(PDO::FETCH_COLUMN);
 
         $startDate = date('Y-m-d H:i:s');
-        if ($currentSameLevel) $startDate = $currentSameLevel['expires_at'];
-        elseif ($higherLevelExpiry) $startDate = $higherLevelExpiry;
-        
+        if ($currentSameLevel) {
+            $startDate = $currentSameLevel['expires_at'];
+        } elseif ($higherLevelExpiry) {
+            $startDate = $higherLevelExpiry;
+        }
+
         $expiresAt = date('Y-m-d H:i:s', strtotime("$startDate + $daysToAdd days"));
 
-        if (!$higherLevelExpiry) { 
-            $stmt = $db->getConnection()->prepare("SELECT s.id, s.expires_at FROM subscriptions s JOIN plan_options po ON s.plan_id = po.id JOIN plan_types pt ON po.plan_type_id = pt.id WHERE s.profile_id = :pid AND s.payment_status = 'paid' AND s.expires_at > NOW() AND pt.level < :newLevel");
+        if (!$higherLevelExpiry) {
+            $stmt = $db->getConnection()->prepare("
+                SELECT s.id, s.expires_at
+                FROM subscriptions s
+                JOIN plan_options po ON s.plan_id = po.id
+                JOIN plan_types pt ON po.plan_type_id = pt.id
+                WHERE s.profile_id = :pid
+                AND s.payment_status = 'paid'
+                AND s.expires_at > NOW()
+                AND pt.level < :newLevel
+            ");
             $stmt->execute(['pid' => $profileId, 'newLevel' => $newLevel]);
             $lowerPlans = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -51,33 +84,52 @@ class Subscription {
             }
         }
 
-        $sql = "INSERT INTO subscriptions (profile_id, plan_id, starts_at, expires_at, price_paid, payment_status, transaction_id) VALUES (:pid, :opt, :start, :end, :price, 'paid', :tid)";
-        $db->getConnection()->prepare($sql)->execute(['pid' => $profileId, 'opt' => $planOptionId, 'start' => $startDate, 'end' => $expiresAt, 'price' => $pricePaid ?: $plan['price'], 'tid' => $transactionId]);
+        $sql = "INSERT INTO subscriptions (profile_id, plan_id, starts_at, expires_at, price_paid, payment_status, transaction_id)
+                VALUES (:pid, :opt, :start, :end, :price, 'paid', :tid)";
+        $db->getConnection()->prepare($sql)->execute([
+            'pid' => $profileId,
+            'opt' => $planOptionId,
+            'start' => $startDate,
+            'end' => $expiresAt,
+            'price' => $pricePaid ?: $plan['price'],
+            'tid' => $transactionId
+        ]);
 
         self::updateProfileLevel($profileId);
         return true;
     }
 
-    public static function updateProfileLevel($profileId) {
+    public static function updateProfileLevel($profileId)
+    {
         $db = Database::getInstance();
-        $stmt = $db->getConnection()->prepare("SELECT pt.level FROM subscriptions s JOIN plan_options po ON s.plan_id = po.id JOIN plan_types pt ON po.plan_type_id = pt.id WHERE s.profile_id = :pid AND s.payment_status = 'paid' AND s.expires_at > NOW() ORDER BY pt.level DESC, s.expires_at DESC LIMIT 1");
+        $stmt = $db->getConnection()->prepare("
+            SELECT pt.level
+            FROM subscriptions s
+            JOIN plan_options po ON s.plan_id = po.id
+            JOIN plan_types pt ON po.plan_type_id = pt.id
+            WHERE s.profile_id = :pid
+            AND s.payment_status = 'paid'
+            AND s.expires_at > NOW()
+            ORDER BY pt.level DESC, s.expires_at DESC LIMIT 1
+        ");
         $stmt->execute(['pid' => $profileId]);
         $bestPlan = $stmt->fetch(PDO::FETCH_ASSOC);
         $newLevel = $bestPlan ? $bestPlan['level'] : 0;
         $db->getConnection()->prepare("UPDATE profiles SET current_plan_level = :lvl WHERE id = :pid")->execute(['lvl' => $newLevel, 'pid' => $profileId]);
     }
-    
+
     // Método necessário para o Dashboard mostrar os planos ativos
-    public static function getConsolidatedList($profileId) {
+    public static function getConsolidatedList($profileId)
+    {
         $db = Database::getInstance();
-        
+
         $stmt = $db->getConnection()->prepare("
             SELECT s.*, pt.name as plan_name, pt.color_hex, pt.level, pt.id as type_id
             FROM subscriptions s
             JOIN plan_options po ON s.plan_id = po.id
             JOIN plan_types pt ON po.plan_type_id = pt.id
-            WHERE s.profile_id = :pid 
-            AND s.payment_status = 'paid' 
+            WHERE s.profile_id = :pid
+            AND s.payment_status = 'paid'
             AND s.expires_at > NOW()
             ORDER BY pt.level DESC, s.expires_at ASC
         ");
@@ -85,7 +137,7 @@ class Subscription {
         $rawSubs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $consolidated = [];
-        $maxGlobalExpiry = new DateTime(); 
+        $maxGlobalExpiry = new DateTime();
 
         foreach ($rawSubs as $sub) {
             $typeId = $sub['type_id'];
@@ -116,7 +168,9 @@ class Subscription {
             if ($exp > $now) {
                 $diff = $now->diff($exp);
                 $days = $diff->days;
-                if ($diff->h > 0 || $diff->i > 0) $days++; 
+                if ($diff->h > 0 || $diff->i > 0) {
+                    $days++;
+                }
                 $consolidated[$key]['days_left'] = $days;
             } else {
                 $consolidated[$key]['days_left'] = 0;
@@ -127,10 +181,12 @@ class Subscription {
         if ($maxGlobalExpiry > $now) {
             $diffTotal = $now->diff($maxGlobalExpiry);
             $totalDays = $diffTotal->days;
-            if ($diffTotal->h > 0) $totalDays++;
+            if ($diffTotal->h > 0) {
+                $totalDays++;
+            }
         }
 
-        usort($consolidated, function($a, $b) {
+        usort($consolidated, function ($a, $b) {
             return $b['level'] <=> $a['level'];
         });
 

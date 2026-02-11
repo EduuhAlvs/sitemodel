@@ -1,16 +1,20 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Core\Controller;
-use App\Models\Profile; // Vamos precisar criar métodos de contagem depois
 use App\Core\Database;
 use PDO;
 
-class AdminController extends Controller {
-
+class AdminController extends Controller
+{
     // Método construtor para bloquear acesso não-admin
     // (Como seu framework é simples, vamos fazer a checagem em cada método por segurança)
-    private function checkAuth() {
+    private function checkAuth()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
         if (!isset($_SESSION['user_id'])) {
             $this->redirect('/login');
         }
@@ -28,17 +32,18 @@ class AdminController extends Controller {
         }
     }
 
-    public function index() {
+    public function index()
+    {
         $this->checkAuth();
         $db = Database::getInstance();
 
         // 1. Estatísticas Reais
         // Total de Usuários
         $totalUsers = $db->query("SELECT COUNT(*) as c FROM users")->fetch()['c'];
-        
+
         // Total de Modelos (Perfis)
         $totalModels = $db->query("SELECT COUNT(*) as c FROM profiles")->fetch()['c'];
-        
+
         // Faturamento Total (Soma das assinaturas pagas)
         $revenue = $db->query("SELECT SUM(price_paid) as s FROM subscriptions WHERE payment_status = 'paid'")->fetch()['s'] ?? 0;
 
@@ -58,13 +63,14 @@ class AdminController extends Controller {
     }
 
     // Lista fotos pendentes (is_approved = 0)
-    public function photos() {
+    public function photos()
+    {
         $this->checkAuth();
         $db = Database::getInstance();
 
         // Busca fotos pendentes junto com o nome da modelo
         $stmt = $db->getConnection()->query("
-            SELECT pp.*, p.display_name, u.email 
+            SELECT pp.*, p.display_name, u.email
             FROM profile_photos pp
             JOIN profiles p ON pp.profile_id = p.id
             JOIN users u ON p.user_id = u.id
@@ -79,7 +85,8 @@ class AdminController extends Controller {
     }
 
     // Ação: Aprovar Foto
-    public function approvePhoto() {
+    public function approvePhoto()
+    {
         $this->checkAuth();
         $input = json_decode(file_get_contents('php://input'), true);
         $id = $input['id'] ?? 0;
@@ -95,14 +102,15 @@ class AdminController extends Controller {
     }
 
     // Ação: Rejeitar (Excluir) Foto
-    public function rejectPhoto() {
+    public function rejectPhoto()
+    {
         $this->checkAuth();
         $input = json_decode(file_get_contents('php://input'), true);
         $id = $input['id'] ?? 0;
 
         if ($id) {
             $db = Database::getInstance();
-            
+
             // 1. Pega o caminho do arquivo para deletar do disco
             $stmt = $db->getConnection()->prepare("SELECT file_path FROM profile_photos WHERE id = :id");
             $stmt->execute(['id' => $id]);
@@ -127,18 +135,19 @@ class AdminController extends Controller {
     // --- GESTÃO DE USUÁRIOS ---
 
     // Lista todos os usuários
-    public function users() {
+    public function users()
+    {
         $this->checkAuth();
         $db = Database::getInstance();
 
         // Busca usuários e conta quantos perfis/fotos eles têm
         // Também formata a data para ficar bonita
-        $sql = "SELECT u.*, 
+        $sql = "SELECT u.*,
                 (SELECT COUNT(*) FROM profiles WHERE user_id = u.id) as has_profile,
                 (SELECT display_name FROM profiles WHERE user_id = u.id LIMIT 1) as model_name
-                FROM users u 
+                FROM users u
                 ORDER BY u.created_at DESC";
-        
+
         $users = $db->getConnection()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
         $this->view('admin/users', [
@@ -147,26 +156,33 @@ class AdminController extends Controller {
     }
 
     // Ação: Banir / Desbanir
-    public function toggleBan() {
+    public function toggleBan()
+    {
         $this->checkAuth();
         $input = json_decode(file_get_contents('php://input'), true);
         $id = $input['id'] ?? 0;
 
         if ($id) {
             $db = Database::getInstance();
-            
+
             // Verifica status atual
-            $curr = $db->getConnection()->query("SELECT status FROM users WHERE id = $id")->fetch();
-            $newStatus = ($curr['status'] === 'banned') ? 'active' : 'banned';
+            $stmt = $db->getConnection()->prepare("SELECT status FROM users WHERE id = :id");
+            $stmt->execute(['id' => $id]);
+            $curr = $stmt->fetch();
 
-            // Atualiza
-            $stmt = $db->getConnection()->prepare("UPDATE users SET status = :st WHERE id = :id");
-            $stmt->execute(['st' => $newStatus, 'id' => $id]);
+            if ($curr) {
+                $newStatus = ($curr['status'] === 'banned') ? 'active' : 'banned';
 
-            echo json_encode(['success' => true, 'new_status' => $newStatus]);
+                // Atualiza
+                $stmt = $db->getConnection()->prepare("UPDATE users SET status = :st WHERE id = :id");
+                $stmt->execute(['st' => $newStatus, 'id' => $id]);
+
+                echo json_encode(['success' => true, 'new_status' => $newStatus]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Usuário não encontrado']);
+            }
         } else {
             echo json_encode(['success' => false]);
         }
     }
-
 }

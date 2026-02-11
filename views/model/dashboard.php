@@ -3,7 +3,7 @@
 
 // --- 0. HELPER FUNCTIONS (API) ---
 function getPlanName($price, $id = null) {
-    if ($price >= 100) return 'Plano VIP'; 
+    if ($price >= 100) return 'Plano VIP';
     if ($price >= 50) return 'Plano Plus';
     if ($price > 0) return 'Plano Premium';
     return 'Plano #' . ($id ?? '?');
@@ -12,15 +12,15 @@ function getPlanName($price, $id = null) {
 // --- 1. HANDLER AJAX PARA HISTÓRICO ---
 if (isset($_GET['action']) && $_GET['action'] === 'load_history') {
     if (!isset($_SESSION['user_id'])) { http_response_code(403); exit; }
-    
+
     header('Content-Type: application/json');
     $db = \App\Core\Database::getInstance();
-    
+
     $profileId = $_GET['profile_id'] ?? 0;
     $page = (int)($_GET['page'] ?? 1);
     $limit = 5;
     $offset = ($page - 1) * $limit;
-    
+
     try {
         $stmtHist = $db->getConnection()->prepare("
             SELECT s.*
@@ -31,20 +31,20 @@ if (isset($_GET['action']) && $_GET['action'] === 'load_history') {
         ");
         $stmtHist->execute([$profileId]);
         $rows = $stmtHist->fetchAll(\PDO::FETCH_ASSOC);
-        
+
         $data = [];
         foreach($rows as $row) {
             $status = $row['payment_status'] ?? 'pending';
             $statusLabel = 'Pendente';
             $statusClass = 'bg-slate-100 text-slate-500';
-            
+
             if($status === 'paid') { $statusLabel = 'Pago'; $statusClass = 'bg-green-50 text-green-700'; }
             elseif($status === 'refunded') { $statusLabel = 'Reembolsado'; $statusClass = 'bg-red-50 text-red-700'; }
             elseif($status === 'failed') { $statusLabel = 'Falhou'; $statusClass = 'bg-red-50 text-red-700'; }
-            
+
             $expires = strtotime($row['expires_at']);
-            $validity = ($expires > time() && $status === 'paid') 
-                ? '<span class="text-green-600 font-bold">Ativo até '.date('d/m/y', $expires).'</span>' 
+            $validity = ($expires > time() && $status === 'paid')
+                ? '<span class="text-green-600 font-bold">Ativo até '.date('d/m/y', $expires).'</span>'
                 : '<span class="text-slate-400">Expirou em '.date('d/m/y', $expires).'</span>';
 
             $data[] = [
@@ -56,7 +56,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'load_history') {
                 'validity_html' => $validity
             ];
         }
-        
+
         echo json_encode(['success' => true, 'data' => $data, 'has_more' => count($rows) === $limit]);
     } catch (\Exception $e) {
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
@@ -88,14 +88,14 @@ $stmtActive = $conn->prepare("SELECT COUNT(*) FROM subscriptions WHERE profile_i
 $stmtActive->execute([$profile['id']]);
 $hasActivePlan = $stmtActive->fetchColumn() > 0;
 if (!$hasActivePlan) $hasActivePlan = (int)($profile['current_plan_level'] ?? 0) > 0;
-$isVisuallyOnline = $hasActivePlan; 
+$isVisuallyOnline = $hasActivePlan;
 
 // --- 4. ASSINATURAS ATIVAS ---
 $activePlans = [];
 try {
     $stmtPlans = $conn->prepare("
-        SELECT s.*, DATEDIFF(s.expires_at, NOW()) as days_left 
-        FROM subscriptions s 
+        SELECT s.*, DATEDIFF(s.expires_at, NOW()) as days_left
+        FROM subscriptions s
         WHERE s.profile_id = ? AND s.payment_status = 'paid' AND s.expires_at > NOW()
     ");
     $stmtPlans->execute([$profile['id']]);
@@ -142,11 +142,11 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel VIP - <?= htmlspecialchars($profile['display_name']) ?></title>
-    
+
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    
+
     <script>
         tailwind.config = {
             theme: {
@@ -157,7 +157,7 @@ try {
             }
         }
         const BASE_URL = "<?= rtrim(url('/'), '/') ?>";
-        const CURRENT_PROFILE_ID = "<?= $profile['id'] ?>"; 
+        const CURRENT_PROFILE_ID = "<?= $profile['id'] ?>";
     </script>
     <style>
         body { background-color: #f8fafc; background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 24px 24px; }
@@ -190,11 +190,11 @@ try {
             </div>
         </div>
     </nav>
-    
+
     <div class="max-w-7xl mx-auto px-4 pt-24 pb-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
+
         <aside class="lg:col-span-3 space-y-5 sidebar-sticky">
-            
+
             <div class="panel p-4 bg-white">
                 <div class="flex justify-between items-center mb-3">
                     <span class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Meus Perfis (<?= count($myProfiles) ?>)</span>
@@ -205,11 +205,11 @@ try {
                     <?php endif; ?>
                 </div>
                 <div class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                    <?php 
-                    foreach($myProfiles as $p): 
-                        $isActive = ($p['id'] == $profile['id']); 
-                        $pImg = !empty($p['profile_image']) ? url('/' . $p['profile_image']) : 'https://ui-avatars.com/api/?name='.urlencode($p['display_name']).'&background=cbd5e1&color=fff&size=64'; 
-                        
+                    <?php
+                    foreach($myProfiles as $p):
+                        $isActive = ($p['id'] == $profile['id']);
+                        $pImg = !empty($p['profile_image']) ? url('/' . $p['profile_image']) : 'https://ui-avatars.com/api/?name='.urlencode($p['display_name']).'&background=cbd5e1&color=fff&size=64';
+
                         $isOnline = false;
                         if ($isActive) {
                             $isOnline = $isVisuallyOnline;
@@ -235,7 +235,7 @@ try {
                     <?php endforeach; ?>
                 </div>
             </div>
-            
+
             <div class="panel p-6 text-center group bg-white border-t-4 border-pink-500">
                 <div class="relative inline-block mb-3">
                     <img src="<?= $profileImg ?>" class="w-20 h-20 rounded-full object-cover ring-2 ring-offset-2 ring-pink-500 group-hover:scale-105 transition duration-300">
@@ -245,12 +245,12 @@ try {
                         <div class="absolute bottom-0 right-0 w-5 h-5 bg-slate-400 border-4 border-white rounded-full" title="Offline"></div>
                     <?php endif; ?>
                 </div>
-                
+
                 <h2 class="font-display font-bold text-lg text-slate-900 leading-tight"><?= htmlspecialchars($profile['display_name']) ?></h2>
                 <p class="text-xs text-slate-400 font-medium uppercase mt-1 tracking-wide">Editando Agora</p>
                 <a href="<?= url('/planos?profile_id='.$profile['id']) ?>" class="block w-full py-2 mt-4 rounded-lg bg-slate-900 text-white font-bold text-xs hover:bg-slate-700 transition">Impulsionar Este Perfil</a>
             </div>
-            
+
             <div class="panel hidden lg:block overflow-hidden py-1">
                 <nav class="flex flex-col text-sm font-medium text-slate-600">
                     <a href="#plans" class="px-5 py-2.5 hover:bg-slate-50 hover:text-pink-600 transition flex items-center gap-3"><i class="fas fa-layer-group w-4 text-center"></i> Planos</a>
@@ -264,9 +264,9 @@ try {
                 </nav>
             </div>
         </aside>
-        
+
         <main class="lg:col-span-9 space-y-6">
-            
+
             <section id="plans" class="scroll-mt-24">
                 <div class="flex justify-between items-center mb-3 px-1">
                     <h3 class="font-display font-bold text-lg text-slate-800">Assinaturas Ativas</h3>
@@ -279,9 +279,9 @@ try {
                     </div>
                 <?php else: ?>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <?php 
-                        foreach($activePlans as $index => $plan): 
-                            $isMain = ($index === 0); 
+                        <?php
+                        foreach($activePlans as $index => $plan):
+                            $isMain = ($index === 0);
                             $statusLabel = $isMain ? 'VIGENTE' : 'RESERVA';
                             $statusColor = $isMain ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500';
                             $cardBorder = $isMain ? 'ring-1 ring-pink-500 bg-pink-50/20' : 'bg-white';
@@ -303,7 +303,7 @@ try {
                     </div>
                 <?php endif; ?>
             </section>
-            
+
             <section id="photos" class="panel p-6 scroll-mt-24 relative bg-white">
                 <div class="flex justify-between items-center mb-4"><h3 class="font-display font-bold text-lg text-slate-800">Galeria</h3><span id="upload-status-text" class="text-[10px] font-bold text-pink-600 opacity-0 transition uppercase">Enviando...</span></div>
                 <div id="drop-zone" class="border border-dashed border-slate-300 bg-slate-50 rounded-xl p-6 text-center cursor-pointer hover:bg-white hover:border-pink-400 hover:shadow-sm transition group" onclick="document.getElementById('photoInput').click()">
@@ -324,7 +324,7 @@ try {
                     <?php endforeach; endif; ?>
                 </div>
             </section>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <section id="personal" class="panel p-6 scroll-mt-24 relative bg-white">
                     <div class="flex justify-between items-center mb-5"><h3 class="font-display font-bold text-lg text-slate-800">Dados Pessoais</h3><span id="msg-bio" class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded opacity-0 transition uppercase">Salvo</span></div>
@@ -365,7 +365,7 @@ try {
                         <div><label class="block text-xs font-semibold text-slate-500 mb-1">Olhos</label><select name="eye_color" class="input-std"><option value="castanhos" <?= ($profile['eye_color']??'')=='castanhos'?'selected':'' ?>>Castanhos</option><option value="verdes" <?= ($profile['eye_color']??'')=='verdes'?'selected':'' ?>>Verdes</option><option value="azuis" <?= ($profile['eye_color']??'')=='azuis'?'selected':'' ?>>Azuis</option></select></div>
                         <div><label class="block text-xs font-semibold text-slate-500 mb-1">Altura (cm)</label><input type="number" name="height_cm" value="<?= $profile['height_cm'] ?>" class="input-std" placeholder="170"></div>
                         <div><label class="block text-xs font-semibold text-slate-500 mb-1">Peso (kg)</label><input type="number" name="weight_kg" value="<?= $profile['weight_kg'] ?>" class="input-std" placeholder="60"></div>
-                        
+
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 mb-1">Tamanho Seios</label>
                             <select name="cup_size" class="input-std">
@@ -393,13 +393,13 @@ try {
                     </form>
                 </section>
             </div>
-            
+
             <section id="reviews" class="panel p-6 scroll-mt-24 relative bg-white">
                 <div class="flex justify-between items-center mb-5"><h3 class="font-display font-bold text-lg text-slate-800 flex items-center gap-2"><i class="fas fa-star text-yellow-400"></i> Gestão de Avaliações</h3><span class="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded"><?= count($reviews) ?> total</span></div>
                 <?php if (empty($reviews)): ?><div class="text-center py-10 border border-dashed border-slate-200 rounded-xl bg-slate-50"><i class="far fa-comment-dots text-2xl text-slate-300 mb-2"></i><p class="text-sm text-slate-500">Ainda não há avaliações.</p></div>
                 <?php else: ?><div class="space-y-4"><?php foreach($reviews as $rev): ?><div class="bg-slate-50 border border-slate-200 rounded-xl p-4"><div class="flex justify-between items-start mb-2"><div><span class="font-bold text-slate-700 text-sm"><?= htmlspecialchars($rev['reviewer_name'] ?? 'Anônimo') ?></span><div class="flex text-yellow-400 text-xs mt-0.5"><?php for($i=0; $i<5; $i++): ?><i class="<?= $i < $rev['rating'] ? 'fas' : 'far' ?> fa-star"></i><?php endfor; ?></div></div><div class="flex gap-2"><?php if($hasActivePlan): ?><button onclick="deleteReview(<?= $rev['id'] ?>)" class="text-slate-400 hover:text-red-500 transition text-xs flex items-center gap-1"><i class="fas fa-trash-alt"></i> Apagar</button><?php else: ?><button class="text-slate-300 cursor-not-allowed text-xs flex items-center gap-1"><i class="fas fa-lock"></i> Apagar</button><?php endif; ?></div></div><p class="text-sm text-slate-600 italic mb-3">"<?= htmlspecialchars($rev['comment']) ?>"</p><form onsubmit="replyReview(event, <?= $rev['id'] ?>)" class="border-t border-slate-200 pt-2 mt-2"><?php if(!empty($rev['reply'])): ?><div class="bg-white p-3 rounded-lg border border-pink-100 text-xs text-slate-600"><strong class="text-pink-600 block mb-1">Sua Resposta:</strong><?= htmlspecialchars($rev['reply']) ?></div><?php else: ?><div class="flex gap-2"><input type="text" name="reply_text" placeholder="Escreva uma resposta..." class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:border-pink-500 outline-none"><button class="bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-700">Enviar</button></div><?php endif; ?></form></div><?php endforeach; ?></div><?php endif; ?>
             </section>
-            
+
             <section id="about" class="panel p-6 scroll-mt-24 relative bg-white">
                  <div class="flex justify-between items-center mb-5"><h3 class="font-display font-bold text-lg text-slate-800">Sobre Mim</h3><span id="msg-about" class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded opacity-0 transition uppercase">Salvo</span></div>
                 <form onsubmit="saveCard(event, 'about')" class="space-y-5">
@@ -412,7 +412,7 @@ try {
                     <button class="btn-primary">Salvar Descrição</button>
                 </form>
             </section>
-            
+
             <section id="service" class="panel p-6 scroll-mt-24 relative bg-white">
                 <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4"><h3 class="font-display font-bold text-lg text-slate-800">Locais & Serviços</h3><span id="msg-service_details" class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded opacity-0 transition uppercase">Salvo</span></div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -428,7 +428,7 @@ try {
                     </form>
                 </div>
             </section>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <section id="schedule" class="panel p-6 relative bg-white">
                     <div class="flex justify-between items-center mb-5"><h3 class="font-display font-bold text-lg text-slate-800">Horários</h3><span id="msg-schedule" class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded opacity-0 transition uppercase">Salvo</span></div>
@@ -439,7 +439,7 @@ try {
                         <button class="btn-primary mt-4">Salvar Horários</button>
                     </form>
                 </section>
-                
+
                 <div class="space-y-6">
                     <section class="panel p-6 relative bg-white">
                         <div class="flex justify-between items-center mb-5"><h3 class="font-display font-bold text-lg text-slate-800">Contato</h3><span id="msg-contact" class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded opacity-0 transition uppercase">Salvo</span></div>
@@ -451,7 +451,7 @@ try {
                             <button class="btn-primary">Salvar Contato</button>
                         </form>
                     </section>
-                    
+
                     <section class="panel p-6 bg-white">
                         <h3 class="font-display font-bold text-lg text-slate-800 mb-4">Idiomas</h3>
                          <div class="flex gap-2 mb-3"><select id="langSelect" class="flex-1 input-std p-1.5"><option>Inglês</option><option>Espanhol</option><option>Francês</option><option>Italiano</option></select><select id="langLevel" class="w-24 input-std p-1.5"><option value="medium">Médio</option><option value="native">Fluente</option></select><button onclick="addLanguage()" class="bg-pink-600 text-white px-3 rounded-lg hover:bg-pink-700"><i class="fas fa-plus"></i></button></div>
@@ -459,15 +459,15 @@ try {
                     </section>
                 </div>
             </div>
-            
+
             <section id="history" class="panel overflow-hidden scroll-mt-24">
                 <div class="p-6 border-b border-slate-100 bg-white">
                     <h3 class="font-display font-bold text-lg text-slate-800 flex items-center gap-2">
                         <i class="fas fa-history text-pink-500"></i> Histórico Detalhado
                     </h3>
                 </div>
-                
-                <div class="w-full">
+
+                <div class="w-full overflow-x-auto">
                     <table class="w-full text-left text-sm text-slate-600">
                         <thead class="hidden md:table-header-group bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
                             <tr>
@@ -482,7 +482,7 @@ try {
                             </tbody>
                     </table>
                 </div>
-                
+
                 <div id="history-loading" class="p-4 text-center text-xs text-slate-400 hidden">Carregando...</div>
                 <div class="p-4 text-center bg-slate-50 border-t border-slate-100">
                     <button id="btn-load-history" onclick="loadHistory()" class="text-xs font-bold text-pink-600 hover:text-pink-700 uppercase tracking-wide">
@@ -514,30 +514,30 @@ try {
             const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + "?profile_id=" + CURRENT_PROFILE_ID;
             window.history.replaceState({path: newUrl}, '', newUrl);
         }
-        
+
         loadHistory();
     });
-    
+
     // --- LÓGICA DE HISTÓRICO AJAX ---
     let historyPage = 1;
     let isLoadingHistory = false;
-    
+
     async function loadHistory() {
         if (isLoadingHistory) return;
-        
+
         const btn = document.getElementById('btn-load-history');
         const loader = document.getElementById('history-loading');
         const tableBody = document.getElementById('history-body');
-        
+
         isLoadingHistory = true;
         btn.disabled = true;
         btn.classList.add('opacity-50');
         loader.classList.remove('hidden');
-        
+
         try {
             const res = await fetch(`?action=load_history&page=${historyPage}&profile_id=${CURRENT_PROFILE_ID}`);
             const json = await res.json();
-            
+
             if (json.success) {
                 if (json.data.length === 0 && historyPage === 1) {
                     tableBody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs">Nenhum histórico encontrado.</td></tr>';
@@ -547,7 +547,7 @@ try {
                         const tr = document.createElement('tr');
                         // No Desktop é ROW, no Mobile é COL (Card Layout)
                         tr.className = 'flex flex-col md:table-row border-b border-slate-100 md:border-0 hover:bg-slate-50 transition p-4 md:p-0';
-                        
+
                         tr.innerHTML = `
                             <td class="flex justify-between md:table-cell md:px-6 md:py-4 md:whitespace-nowrap">
                                 <span class="md:hidden text-xs font-bold text-slate-500 uppercase w-20">Data</span>
@@ -575,9 +575,9 @@ try {
                         `;
                         tableBody.appendChild(tr);
                     });
-                    
+
                     historyPage++;
-                    
+
                     if (!json.has_more) {
                         btn.classList.add('hidden');
                     }
@@ -626,10 +626,10 @@ try {
         const form = event.target;
         const btn = form.querySelector('button');
         const oldText = btn.innerText; btn.innerText = "..."; btn.disabled = true;
-        
+
         const formData = new FormData(form);
         const dataObj = {};
-        
+
         // CORREÇÃO PONTUAL: Tratamento de strings vazias para INT (Medidas)
         formData.forEach((value, key) => {
             if (value === '' && (key.endsWith('_cm') || key.endsWith('_kg'))) {
@@ -640,7 +640,7 @@ try {
         });
 
         if (!dataObj.profile_id) dataObj.profile_id = CURRENT_PROFILE_ID;
-        
+
         if(sectionName === 'service_details') {
             const details = {};
             form.querySelectorAll('input[name^="details["]').forEach(cb => { const key = cb.name.match(/\[(.*?)\]/)[1]; details[key] = cb.checked ? 1 : 0; });
@@ -655,14 +655,14 @@ try {
         try {
             const res = await fetch(`${BASE_URL}/api/perfil/save`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ section: sectionName, data: dataObj }) });
             const json = await res.json();
-            if(json.success) { 
-                const msg = document.getElementById('msg-' + sectionName); 
-                if(msg) { msg.style.opacity = '1'; setTimeout(() => msg.style.opacity = '0', 2000); } 
+            if(json.success) {
+                const msg = document.getElementById('msg-' + sectionName);
+                if(msg) { msg.style.opacity = '1'; setTimeout(() => msg.style.opacity = '0', 2000); }
             } else alert('Erro: ' + json.message);
         } catch(e) { console.error(e); alert('Erro conexão'); }
         finally { btn.innerText = oldText; btn.disabled = false; }
     }
-    
+
     async function saveSchedule(e) {
         e.preventDefault();
         const form = e.target;

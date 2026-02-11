@@ -1,14 +1,18 @@
 <?php
+
 namespace App\Core;
 
 use PDO;
 use PDOException;
+use Exception;
 
-class Database {
+class Database
+{
     private static $instance = null;
     private $pdo;
 
-    private function __construct() {
+    private function __construct()
+    {
         $config = require __DIR__ . '/../../config/database.php';
 
         try {
@@ -16,24 +20,28 @@ class Database {
             $this->pdo = new PDO($dsn, $config['user'], $config['password'], $config['options']);
         } catch (PDOException $e) {
             // Em produção, nunca mostre o erro real na tela. Logue em arquivo.
-            die("Erro crítico de conexão com o banco de dados.");
+            error_log("DB Connection Error: " . $e->getMessage());
+            throw new Exception("Erro crítico de conexão com o banco de dados.");
         }
     }
 
     // Padrão Singleton: Garante uma única conexão
-    public static function getInstance() {
+    public static function getInstance()
+    {
         if (self::$instance === null) {
             self::$instance = new self();
         }
         return self::$instance;
     }
 
-    public function getConnection() {
+    public function getConnection()
+    {
         return $this->pdo;
     }
-    
+
     // Método auxiliar para queries seguras (Prepared Statements)
-    public static function query($sql, $params = []) {
+    public static function query($sql, $params = [])
+    {
         $stmt = self::getInstance()->getConnection()->prepare($sql);
         $stmt->execute($params);
         return $stmt;

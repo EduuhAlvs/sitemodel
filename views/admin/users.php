@@ -35,8 +35,10 @@
         </header>
 
         <main class="flex-1 overflow-y-auto p-6 bg-gray-900">
-            
+            <div class="max-w-7xl mx-auto w-full">
+
             <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
+                <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-gray-700/50 text-gray-400 text-xs uppercase tracking-wider">
@@ -48,12 +50,12 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-700 text-sm">
-                        <?php foreach($users as $u): 
+                        <?php foreach($users as $u):
                             $isBanned = $u['status'] === 'banned';
                             $isAdmin = $u['role'] === 'admin';
                         ?>
                         <tr class="hover:bg-gray-700/30 transition">
-                            
+
                             <td class="p-4">
                                 <div class="flex items-center">
                                     <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs font-bold mr-3">
@@ -83,7 +85,7 @@
                             </td>
 
                             <td class="p-4">
-                                <span id="status-badge-<?= $u['id'] ?>" class="px-2 py-1 rounded-full text-xs font-bold flex items-center w-max 
+                                <span id="status-badge-<?= $u['id'] ?>" class="px-2 py-1 rounded-full text-xs font-bold flex items-center w-max
                                     <?= $isBanned ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500' ?>">
                                     <span class="w-2 h-2 rounded-full mr-2 <?= $isBanned ? 'bg-red-500' : 'bg-green-500' ?>"></span>
                                     <?= $isBanned ? 'Banido' : 'Ativo' ?>
@@ -92,8 +94,8 @@
 
                             <td class="p-4 text-right">
                                 <?php if(!$isAdmin): // Não pode banir admin ?>
-                                    <button onclick="toggleBan(<?= $u['id'] ?>)" id="btn-ban-<?= $u['id'] ?>" 
-                                        class="text-xs font-bold px-3 py-1 rounded transition border 
+                                    <button onclick="toggleBan(<?= $u['id'] ?>)" id="btn-ban-<?= $u['id'] ?>"
+                                        class="text-xs font-bold px-3 py-1 rounded transition border
                                         <?= $isBanned ? 'border-green-500 text-green-500 hover:bg-green-500 hover:text-white' : 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white' ?>">
                                         <?= $isBanned ? 'Desbanir' : 'Banir' ?>
                                     </button>
@@ -103,8 +105,10 @@
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
             </div>
 
+            </div>
         </main>
     </div>
 </div>
